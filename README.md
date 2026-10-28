@@ -1,9 +1,63 @@
 # Scheduled centralized dumps for Copilot Studio agents
 
+## Purpose
+
+Use this branch to turn manual agent troubleshooting into recurring, centralized reporting.
+It collects available Copilot Studio transcript evidence from Dataverse and builds the chain
+**conversation -> MCP tool call -> submitted query -> result/error** for one, several, or all
+accessible agents in an environment. An Azure-hosted collector runs monthly, weekly, daily,
+or every five minutes and writes reports to private Blob Storage, with checkpoints and coverage
+diagnostics to support repeatable operations. Polling frequency does not remove transcript save
+delays, and the collector cannot recover query details that the source never exposes.
+
 You are on **`enterprise-automation`**. This branch deploys an Azure Functions collector that
 reads Dataverse and stores private CSV/JSON reports for **one agent, selected agents, or all accessible
 agents in one Copilot Studio environment**. Use one deployment per environment.
 For a local ONE-agent test without deploying anything, switch to **`script-template`** and follow its README.
+
+## File structure and what each part does
+
+```text
+copilot-studio-mcp-observability/
+|-- README.md                          Start here: setup and verification
+|-- function_app.py                    Scheduled Azure Function entry point
+|-- host.json                          Function host timeout and logging settings
+|-- requirements.txt                   Runtime Python dependencies
+|-- requirements-dev.txt               Test/lint/type-check dependencies
+|-- pyproject.toml                     Lint and type-check configuration
+|-- local.settings.example.json        Local settings reference; not hosted configuration
+|-- observability/
+|   |-- __init__.py                    Python package marker
+|   |-- collector.py                   Agent scope, windows, exports and checkpoints
+|   |-- dataverse.py                   Authenticated paged reads and retries
+|   |-- parser.py                      Transcript-to-tool-call table adapter
+|   `-- azure_store.py                 Private Blob writes and renewable state lease
+|-- infra/
+|   |-- main.bicep                     Azure infrastructure and scheduled settings
+|   |-- client.parameters.example.json Deployment configuration template
+|   `-- client.parameters.json         Your private deployment values [created locally]
+|-- docs/
+|   |-- CLIENT-OVERVIEW.md             Client-facing purpose, architecture and limits
+|   |-- DEPLOYMENT.md                  Detailed deployment and recovery runbook
+|   `-- environment-telemetry.kql      Optional native telemetry diagnostic query
+|-- tests/
+|   |-- test_observability.py          Collector, parser, API and lease tests
+|   |-- Test-Script.ps1                Interactive helper/exporter tests
+|   `-- synthetic-transcripts.json    Fabricated test input; no client data
+|-- .github/workflows/validate.yml     CI checks; does not deploy Azure resources
+|-- .funcignore                       Excludes local-only files from Function publishing
+|-- .gitignore                        Excludes private configuration and outputs from Git
+|-- Export-OneAgent.ps1                Optional interactive agent-ID discovery/export helper
+|-- Get-CopilotMcpToolLogs.ps1          Standalone interactive exporter
+|-- .env.example                      Configuration template for interactive helper only
+`-- .env                              Your interactive settings [created locally]
+```
+
+Files marked **created locally** are not shipped with the repository and must stay out of Git.
+The hosted collector reads application settings populated by Bicep; it does **not** load `.env`.
+Centralized outputs live in Azure Blob Storage, not inside this source tree.
+Start with `infra/client.parameters.example.json` for hosted setup; the PowerShell helpers are
+optional and do not drive the recurring automation.
 
 ## 1. Understand what will be deployed
 
