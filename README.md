@@ -1,6 +1,7 @@
 # One agent: conversation -> MCP tool -> query table
 
-## Purpose
+<details>
+<summary><strong>Purpose — trace MCP calls for ONE Copilot Studio agent</strong></summary>
 
 Use this branch to investigate **one Copilot Studio agent** without deploying a service.
 You supply the environment URL and one agent ID, sign in with Azure CLI, and run a local
@@ -14,31 +15,57 @@ You are on **`script-template`**. This branch is a local, interactive PowerShell
 It does not deploy Azure resources or run queries against your downstream database.
 For scheduled private centralized dumps, switch to **`enterprise-automation`** and read its different README.
 
-## File structure and what each part does
+</details>
+
+<details>
+<summary><strong>File structure — what to configure, what to run, and where your table appears</strong></summary>
+
+### Repository map
 
 ```text
 copilot-studio-mcp-observability/
-|-- README.md                       Start here: follow the numbered setup steps
-|-- .env.example                    Blank template for your environment and one agent
-|-- .env                            Your private settings [created locally]
-|-- Export-OneAgent.ps1              Reads .env, lists agent IDs, exports exactly one agent
-|-- Get-CopilotMcpToolLogs.ps1        Fetches/parses transcripts and writes JSON/CSV/Excel
-|-- tests/
-|   |-- Test-Script.ps1              Offline synthetic checks, including one-agent filtering
-|   `-- synthetic-transcripts.json  Fabricated transcript input; no client data
-|-- exports/                        Private output directory [created when exporting]
-|   |-- synthetic.csv               Offline example table [generated]
-|   `-- one-agent.csv               Your real agent's table [generated]
-|-- .github/
-|   `-- workflows/
-|       `-- validate.yml            Runs synthetic script tests on GitHub
-`-- .gitignore                      Keeps .env and exports out of Git
+├── README.md
+├── .env.example
+├── .env *
+├── Export-OneAgent.ps1
+├── Get-CopilotMcpToolLogs.ps1
+├── tests/
+│   ├── Test-Script.ps1
+│   └── synthetic-transcripts.json
+├── exports/ *
+│   ├── synthetic.csv *
+│   └── one-agent.csv *
+├── .github/
+│   └── workflows/
+│       └── validate.yml
+└── .gitignore
 ```
 
-Files marked **created locally** or **generated** are not shipped with the repository.
-For the walkthrough, edit only `.env` after copying `.env.example`; you do not need to
-edit either script. `Export-OneAgent.ps1` is the entry point you run, and it calls
-`Get-CopilotMcpToolLogs.ps1` to produce the table. Treat real exports as confidential.
+`*` Created locally during setup or export; not shipped or committed.
+
+### How the files work together
+
+**Your `.env` -> one-agent helper -> Dataverse transcripts -> MCP-call table**
+
+| File | How it helps you trace MCP calls | What you do with it |
+|---|---|---|
+| [README.md](README.md) | Guides you from no setup to a verified conversation/tool/query table for one agent. | Follow the numbered steps below, starting with the offline test. |
+| [.env.example](.env.example) | Lists the connection and scope settings: tenant, Dataverse URL, one agent's `botid`, history window and CSV destination. | Copy it to `.env`. This template intentionally contains no working client identifiers. |
+| `.env` (local only) | Tells the helper **which environment and exactly which agent** to inspect and where to save the table. Does not enable telemetry recording or schedule monitoring. | Fill your values; keep it private. Do not edit the scripts to configure your environment. |
+| [Export-OneAgent.ps1](Export-OneAgent.ps1) | Your entry point: reads `.env`, checks the signed-in tenant, lists agent IDs when requested, and requires one agent ID before exporting. | Run with `-ListAgents` to find the right `botid`; then run without that flag to generate the table. |
+| [Get-CopilotMcpToolLogs.ps1](Get-CopilotMcpToolLogs.ps1) | Does the evidence extraction: reads saved transcripts, filters to the requested agent, matches tool-call IDs, and extracts available query/result/error plus conversation and message fields. It does not invoke MCP tools or run the extracted SQL. | The helper calls it for you. Use directly only for offline fixtures or advanced JSON/CSV/Excel export. |
+| `exports/one-agent.csv` (generated) | The actual investigation result: one row per observed completed/failed tool event, linking conversation, tool, query and available outcome evidence. | Open privately in Excel or PowerShell; verify the BotId and a known conversation. Empty output does not prove no tool calls occurred. |
+| [tests/synthetic-transcripts.json](tests/synthetic-transcripts.json) | A fabricated conversation with a known MCP call/query, so you can test extraction without tenant access or exposing client data. | Use the offline commands in step 2. |
+| [tests/Test-Script.ps1](tests/Test-Script.ps1) | Checks that extraction, `.env` handling and one-agent filtering work against synthetic data before you troubleshoot a real environment. | Run first; it does not validate live Dataverse permissions or connector payloads. |
+| `exports/synthetic.csv` (generated) | Your offline example of what the real MCP-call table should look like. | Compare its columns with the real export; it is not evidence from your agent. |
+| [.github/workflows/validate.yml](.github/workflows/validate.yml) | Runs synthetic tests when code changes, to catch regressions in table generation. | No client setup needed; it does not monitor your agent or access your tenant. |
+| [.gitignore](.gitignore) | Keeps local `.env` and exports out of ordinary Git staging so connection details and conversation data are not published with code. | Still review what you share; this is not a data-loss-prevention control. |
+
+**Only configure `.env`; then run the helper.** This branch is an on-demand snapshot,
+not ongoing monitoring. Transcripts must already be recorded and saved by Copilot Studio.
+Use `enterprise-automation` for scheduled collection into private centralized storage.
+
+</details>
 
 ## 1. Open this branch in PowerShell 7
 
