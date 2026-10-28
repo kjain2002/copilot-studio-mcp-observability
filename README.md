@@ -1,64 +1,141 @@
-# Copilot Studio MCP observability
+# One agent: conversation -> MCP tool -> query table
 
-Reusable, read-only export of **conversation -> tool invocation -> query -> result/error**.
-No client data, environment identifiers, credentials or internal meeting notes are included.
+You are on **`script-template`**. This branch is a local, interactive PowerShell tool.
+It does not deploy Azure resources or run queries against your downstream database.
+For scheduled private centralized dumps, switch to **`enterprise-automation`** and read its different README.
 
-## Branches
+## 1. Open this branch in PowerShell 7
 
-- `script-template`: standalone PowerShell for an interactive investigation.
-- `enterprise-automation`: Azure-hosted environment-wide collection, private centralized
-  reports, checkpoints, tests and deployment templates. This is the recommended client starting point.
-
-## Script quick start
-
-Requires PowerShell 7.2+, Azure CLI, and Dataverse read access to conversation transcripts.
-Sign in to the intended tenant; the script does not change agents or execute extracted queries.
+Install [PowerShell 7.2+](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
+and [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli-windows).
+Open a **PowerShell 7** terminal, not Windows PowerShell 5.1. From your chosen parent directory:
 
 ```powershell
-az login --tenant YOUR_TENANT_ID
-.\Get-CopilotMcpToolLogs.ps1 -DataverseUrl https://YOURORG.crm.dynamics.com -DaysBack 7 -Format Csv
-.\Get-CopilotMcpToolLogs.ps1 -DataverseUrl https://YOURORG.crm.dynamics.com -BotSchemaName YOUR_BOT_SCHEMA -Format Json
-.\tests\Test-Script.ps1
+git clone --branch script-template https://github.com/kjain2002/copilot-studio-mcp-observability.git
+Set-Location .\copilot-studio-mcp-observability
+git branch --show-current
+$PSVersionTable.PSVersion
+az version
 ```
 
-Omit the agent filter to read transcripts for all agents **visible to the signed-in identity**.
-JSON preserves full query, user prompt and agent reply. Result summaries are bounded to 500 characters.
-CSV/Excel protect spreadsheet cells against formula execution. Excel explicitly requires the
-optional `ImportExcel` module; there is no silent format fallback. Empty JSON is always `[]`.
+If already cloned, open that repository and run `git switch script-template` instead.
+Expected branch: `script-template`. No Python, Azure subscription deployment, or Excel module is required.
 
-The original fields are preserved: ConversationId, TurnId, UserId, BotName, BotId,
-ToolCallTime, ToolName, ToolCategory, ToolCallId, SqlQuery, Status, DurationMs,
-QueryResult, UserMessage, AgentResponse. Additional fields expose error evidence,
-transcript identity, correlation quality and missing-query state.
+## 2. Prove the script works with synthetic data first
 
-## Important limits
+```powershell
+.\tests\Test-Script.ps1
+.\Get-CopilotMcpToolLogs.ps1 -TranscriptsPath .\tests\synthetic-transcripts.json -BotId 11111111-1111-1111-1111-111111111111 -Format Csv -OutputPath .\exports\synthetic.csv
+Import-Csv .\exports\synthetic.csv | Format-Table BotName, ToolName, SqlQuery, Status -Wrap
+```
 
-- Transcript saving normally follows **30 minutes of conversation inactivity**. Five-minute polling
-  cannot make a running conversation appear immediately.
-- Default transcript retention is **30 days**. A monthly job alone can lose data in a 31-day
-  month or after a missed run. Extend source retention before choosing monthly-only collection.
-- `ToolCallTrace:*` is an observed payload shape from a working integration, **not a documented,
-  guaranteed event contract**. Validate with sanitized samples from each target connector/harness.
-- A query hidden by the platform or managed MCP cannot be recovered by this collector.
-  `NotExposed` is not an empty successful query. Status such as `N/A` is not an HTTP code.
-- Message pairing is temporal, not proof of causal attribution. Missing starts are retained as
-  such; unmatched starts emit warnings. Environment inventory is in the automation branch.
-- Recording disabled, deleted transcripts, inaccessible agents, unsupported activity shapes,
-  consent pauses and missing events prevent complete historical coverage.
+Expected: tests pass; one row with `sample_agent`, `sample_mcp`, `SELECT COUNT(*) FROM sample`.
+This is fabricated test data, not a connection to your tenant.
 
-## Data handling
+## 3. Find your environment's URL and tenant ID
 
-**Public code does not mean public telemetry.** Exports include SQL, prompts, replies, user IDs,
-errors and potentially business data in result summaries. Store them only in approved private
-locations. Do not upload exports, real transcripts or local settings to issues, CI artifacts or Git.
-`.gitignore` is a convenience, not a data-loss-prevention control.
+In the [Power Platform admin center](https://admin.powerplatform.microsoft.com/), select your
+target environment and copy its **Environment URL**, for example `https://YOURORG.crm.dynamics.com`.
+Do not use the Copilot Studio browser URL, an environment GUID or an Application Insights URL.
+Get the **Directory (tenant) ID** from Microsoft Entra admin center -> Overview.
+An environment administrator can supply these if you lack access.
 
-## Sources
+You need Dataverse Read access to **Agent (`bot`)** and **Conversation Transcript
+(`conversationtranscript`)**, covering the intended agent, and transcript recording must be enabled.
+Azure subscription access alone does not grant Dataverse access.
 
-- [Transcript schema, save timing and retention](https://learn.microsoft.com/microsoft-copilot-studio/analytics-transcripts-powerapps)
-- [Dataverse transcript table](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/conversationtranscript)
-- [Agent inventory table](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/bot)
-- [Environment-level telemetry (preview)](https://learn.microsoft.com/microsoft-copilot-studio/advanced-environment-level-agent-telemetry)
+## 4. Create .env and fill in TWO values first
 
-This is a reusable reference implementation, not a Microsoft product, support commitment or
-compliance certification. Validate in the client's tenant before production adoption.
+```powershell
+Copy-Item .\.env.example .\.env
+notepad .\.env
+```
+
+Fill `TENANT_ID` and `DATAVERSE_URL`:
+
+```dotenv
+TENANT_ID=YOUR_ENTRA_TENANT_GUID
+DATAVERSE_URL=https://YOURORG.crm.dynamics.com
+BOT_ID=YOUR_AGENT_BOT_GUID
+DAYS_BACK=7
+OUTPUT_PATH=exports\one-agent.csv
+```
+
+Leave `BOT_ID` as a placeholder until step 6. This is a plain configuration file; no
+tokens, passwords, shell commands or client secrets belong in it. `.env` and exports are Git-ignored.
+`.env` is read by `Export-OneAgent.ps1`; editing it does not change your terminal environment.
+
+## 5. Sign in to the intended tenant
+
+Replace the placeholder below with the same tenant GUID you put in `.env`:
+
+```powershell
+az login --tenant YOUR_ENTRA_TENANT_GUID --allow-no-subscriptions
+az account show --query tenantId -o tsv
+```
+
+Complete sign-in yourself. The printed GUID must match `TENANT_ID`.
+Do not paste access tokens or passwords into chat.
+
+## 6. Select exactly ONE agent
+
+```powershell
+.\Export-OneAgent.ps1 -ListAgents
+```
+
+Find your intended agent in the table. Copy its **`botid` GUID** into `BOT_ID` in `.env`.
+Use `botid`, not display name, `schemaname`, tenant ID, or environment ID. Duplicate
+display names are possible. A missing agent requires an environment/permission check.
+Save and close `.env`. Leave `DAYS_BACK=7` or choose a positive integer fitting retained history.
+
+## 7. Generate a real tool call
+
+Open that agent in its published channel (for example Teams). Send a safe test prompt you know
+invokes its MCP tool. Complete any consent prompt. Save the conversation ID/time if available.
+Stop interacting and allow **at least 30 minutes of inactivity**, then additional processing time,
+for Dataverse to save the transcript. Test-pane behavior alone is not proof of published-channel coverage.
+An agent with no MCP calls cannot produce a useful MCP table.
+
+## 8. Generate and open the ONE-agent table
+
+```powershell
+.\Export-OneAgent.ps1
+Import-Csv .\exports\one-agent.csv |
+    Format-Table ToolCallTime, BotName, ConversationId, ToolName, SqlQuery, Status -Wrap
+Invoke-Item .\exports\one-agent.csv
+```
+
+The wrapper **requires one BOT_ID** and never defaults to all agents.
+`OUTPUT_PATH` is relative to the repository unless absolute. If you changed it, use that path above.
+The CSV includes query, user prompt, agent reply, user ID, duration, result preview and error evidence.
+Inspect one expected conversation/tool/query and confirm no other BotId appears:
+
+```powershell
+Import-Csv .\exports\one-agent.csv | Group-Object BotId | Select-Object Name, Count
+```
+
+Expected: exactly your agent GUID when there are rows. Do not interpret a header-only CSV as
+successful end-to-end coverage. Result summaries are bounded to 500 characters.
+CSV formula-like cells receive an apostrophe to prevent spreadsheet formula execution.
+
+## Troubleshooting and limits
+
+- **403 / missing agent:** ask the Dataverse admin to check Read access and the target environment.
+- **Wrong tenant / login failure:** repeat step 5; do not change app registrations as a shortcut.
+- **Zero rows:** verify BOT_ID, time range, actual retained transcripts, recording, inactivity delay,
+  permissions and whether this connector emits `ToolCallTrace:Started/Completed/Failed`.
+- **Missing SQL / HTTP code:** the source may not expose it. `NotExposed`, `N/A` or a failed tool
+  does not prove a specific HTTP status. No exporter can recover data never logged.
+- `ToolCallTrace:*` is an observed integration shape, not a guaranteed public platform contract.
+  Malformed input fails; unmatched starts warn. The simple script reports completed/failed calls
+  and skips consent suspensions. The automation branch records pending/consent events too.
+- User/reply pairing is temporal within a turn boundary, not guaranteed causal attribution.
+- Default source retention is 30 days. Increasing `DAYS_BACK` cannot restore deleted history.
+- If scripts are blocked, follow your organization's approved signing/execution-policy process.
+  Do not disable organization policy.
+
+**Keep telemetry private.** Never commit `.env`, real transcripts, SQL, user content or exports,
+or upload them to public issues. This public repository contains only code and synthetic fixtures.
+This reference implementation requires tenant validation; no Azure resources are deployed by these steps.
+
+[Microsoft transcript schema, save timing and retention](https://learn.microsoft.com/microsoft-copilot-studio/analytics-transcripts-powerapps)
