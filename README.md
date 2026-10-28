@@ -1,6 +1,7 @@
 # Scheduled centralized dumps for Copilot Studio agents
 
-## Purpose
+<details>
+<summary><strong>Purpose — scheduled MCP-call monitoring for your agents</strong></summary>
 
 Use this branch to turn manual agent troubleshooting into recurring, centralized reporting.
 It collects available Copilot Studio transcript evidence from Dataverse and builds the chain
@@ -15,49 +16,94 @@ reads Dataverse and stores private CSV/JSON reports for **one agent, selected ag
 agents in one Copilot Studio environment**. Use one deployment per environment.
 For a local ONE-agent test without deploying anything, switch to **`script-template`** and follow its README.
 
-## File structure and what each part does
+</details>
+
+<details>
+<summary><strong>File structure — what to configure, what collects evidence, and where reports go</strong></summary>
+
+### Repository map
 
 ```text
 copilot-studio-mcp-observability/
-|-- README.md                          Start here: setup and verification
-|-- function_app.py                    Scheduled Azure Function entry point
-|-- host.json                          Function host timeout and logging settings
-|-- requirements.txt                   Runtime Python dependencies
-|-- requirements-dev.txt               Test/lint/type-check dependencies
-|-- pyproject.toml                     Lint and type-check configuration
-|-- local.settings.example.json        Local settings reference; not hosted configuration
-|-- observability/
-|   |-- __init__.py                    Python package marker
-|   |-- collector.py                   Agent scope, windows, exports and checkpoints
-|   |-- dataverse.py                   Authenticated paged reads and retries
-|   |-- parser.py                      Transcript-to-tool-call table adapter
-|   `-- azure_store.py                 Private Blob writes and renewable state lease
-|-- infra/
-|   |-- main.bicep                     Azure infrastructure and scheduled settings
-|   |-- client.parameters.example.json Deployment configuration template
-|   `-- client.parameters.json         Your private deployment values [created locally]
-|-- docs/
-|   |-- CLIENT-OVERVIEW.md             Client-facing purpose, architecture and limits
-|   |-- DEPLOYMENT.md                  Detailed deployment and recovery runbook
-|   `-- environment-telemetry.kql      Optional native telemetry diagnostic query
-|-- tests/
-|   |-- test_observability.py          Collector, parser, API and lease tests
-|   |-- Test-Script.ps1                Interactive helper/exporter tests
-|   `-- synthetic-transcripts.json    Fabricated test input; no client data
-|-- .github/workflows/validate.yml     CI checks; does not deploy Azure resources
-|-- .funcignore                       Excludes local-only files from Function publishing
-|-- .gitignore                        Excludes private configuration and outputs from Git
-|-- Export-OneAgent.ps1                Optional interactive agent-ID discovery/export helper
-|-- Get-CopilotMcpToolLogs.ps1          Standalone interactive exporter
-|-- .env.example                      Configuration template for interactive helper only
-`-- .env                              Your interactive settings [created locally]
+├── README.md
+├── infra/
+│   ├── main.bicep
+│   ├── client.parameters.example.json
+│   └── client.parameters.json *
+├── function_app.py
+├── host.json
+├── observability/
+│   ├── __init__.py
+│   ├── dataverse.py
+│   ├── parser.py
+│   ├── collector.py
+│   └── azure_store.py
+├── docs/
+│   ├── CLIENT-OVERVIEW.md
+│   ├── DEPLOYMENT.md
+│   └── environment-telemetry.kql
+├── tests/
+│   ├── test_observability.py
+│   ├── Test-Script.ps1
+│   └── synthetic-transcripts.json
+├── .github/workflows/validate.yml
+├── requirements.txt
+├── requirements-dev.txt
+├── pyproject.toml
+├── local.settings.example.json
+├── Export-OneAgent.ps1
+├── Get-CopilotMcpToolLogs.ps1
+├── .env.example
+├── .env *
+├── .funcignore
+└── .gitignore
 ```
 
-Files marked **created locally** are not shipped with the repository and must stay out of Git.
-The hosted collector reads application settings populated by Bicep; it does **not** load `.env`.
-Centralized outputs live in Azure Blob Storage, not inside this source tree.
-Start with `infra/client.parameters.example.json` for hosted setup; the PowerShell helpers are
-optional and do not drive the recurring automation.
+`*` Created by you locally, not shipped or committed.
+
+### Your setup: connect the environment, choose agents, and choose a schedule
+
+| File | How it contributes to monitoring MCP calls | What you do |
+|---|---|---|
+| [README.md](README.md) | Takes you from an unconfigured clone to a verified centralized conversation/tool/query report. | Follow the numbered steps below. |
+| [infra/client.parameters.example.json](infra/client.parameters.example.json) | Template for the target Dataverse environment, selected agent IDs, collection cadence, report retention and alert recipient. | Copy to `infra/client.parameters.json`; replace placeholders. One agent ID monitors one agent; several select a group; an empty list selects all accessible agents. |
+| [infra/main.bicep](infra/main.bicep) | Turns those choices into Azure resources, hosted settings, identity permissions, private report containers and exception alerts. | Preview with `what-if`, then deploy after approval. It does not grant Dataverse permissions. |
+| [local.settings.example.json](local.settings.example.json) | Shows the runtime setting names the collector expects. | Reference only for local setup; hosted configuration comes from Bicep, not this file or `.env`. |
+
+### Collection: how a conversation becomes a traceable table row
+
+**Schedule -> Dataverse transcripts -> tool-call correlation -> private reports + checkpoint**
+
+| File | Role in that chain |
+|---|---|
+| [function_app.py](function_app.py) | Starts each scheduled collection using managed identity and passes the configured environment and agent selection to the collector. |
+| [observability/dataverse.py](observability/dataverse.py) | Reads the agent inventory and every page of available conversation transcripts; retries transient API failures. It does not call MCP tools or execute their queries. |
+| [observability/parser.py](observability/parser.py) | Matches observed tool start/end events by tool-call ID, extracts available SQL/query text and error evidence, and associates conversation/user/reply fields. Flags missing evidence rather than inventing it. |
+| [observability/collector.py](observability/collector.py) | Applies the agent scope, processes time windows, builds CSV/JSON tables and coverage reports, and advances progress only after a slice is committed. |
+| [observability/azure_store.py](observability/azure_store.py) | Writes reports and progress state to Blob Storage. Renews a lease so concurrent runs cannot independently advance the same checkpoint. |
+| [observability/__init__.py](observability/__init__.py) | Makes the collection modules importable as one Python package; contains no client configuration. |
+| [host.json](host.json) | Controls execution timeout and runtime logging for the monitoring job; it does not enable transcript recording on an agent. |
+
+### Verification, handoff and supporting files
+
+| File | Contribution / when to use it |
+|---|---|
+| [tests/test_observability.py](tests/test_observability.py) | Checks correlation, selected-agent filtering, retries, report commits and checkpoint safety using synthetic/mocked inputs—not a live tenant. |
+| [tests/Test-Script.ps1](tests/Test-Script.ps1), [tests/synthetic-transcripts.json](tests/synthetic-transcripts.json) | Prove the optional interactive exporter can turn fabricated transcript evidence into a one-agent table before using real data. |
+| [docs/CLIENT-OVERVIEW.md](docs/CLIENT-OVERVIEW.md) | Explains what monitoring delivers, its architecture and evidence limits to a client. |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Details Dataverse authorization, report consumption, replay/recovery and production acceptance. |
+| [docs/environment-telemetry.kql](docs/environment-telemetry.kql) | Optional investigation of native environment telemetry; separate from the transcript collector and not a guarantee of query visibility. |
+| [Export-OneAgent.ps1](Export-OneAgent.ps1), [Get-CopilotMcpToolLogs.ps1](Get-CopilotMcpToolLogs.ps1), [.env.example](.env.example) | Optional local helpers for discovering agent IDs or testing one agent. Their local `.env` does **not** configure scheduled collection. |
+| [requirements.txt](requirements.txt) | Installs the Azure/HTTP libraries the hosted collector needs to authenticate, read transcripts and write reports. |
+| [requirements-dev.txt](requirements-dev.txt), [pyproject.toml](pyproject.toml), [.github/workflows/validate.yml](.github/workflows/validate.yml) | Configure repeatable code checks in development and GitHub; CI does not collect tenant data or deploy Azure resources. |
+| [.gitignore](.gitignore), [.funcignore](.funcignore) | Exclude local configuration/outputs from Git or Function publishing. They are safeguards, not a substitute for checking what you share. |
+
+**Where is the monitoring output?** In private Azure Blob Storage, not in this source tree:
+`calls.csv`/`calls.json` hold the correlation table, `agents.json` holds scoped inventory,
+`coverage.json` explains evidence gaps, and manifests/checkpoints record committed progress.
+See [report consumption rules](docs/DEPLOYMENT.md#consume-reports-correctly) before combining snapshots.
+
+</details>
 
 ## 1. Understand what will be deployed
 
