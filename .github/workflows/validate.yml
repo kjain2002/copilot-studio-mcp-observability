@@ -1,0 +1,12 @@
+name: Validate
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  script:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Synthetic script tests
+        shell: pwsh
+        run: .\tests\Test-Script.ps1

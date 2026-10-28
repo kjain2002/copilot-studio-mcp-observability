@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+local.settings.json
+.env
+exports/
+*.xlsx
+*.zip
+infra/main.json
+.ruff_cache/

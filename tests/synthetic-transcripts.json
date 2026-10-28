@@ -1,0 +1,19 @@
+[
+  {
+    "conversationtranscriptid": "00000000-0000-0000-0000-000000000001",
+    "name": "conversation_with_underscores_11111111-1111-1111-1111-111111111111",
+    "modifiedon": "2026-01-02T00:00:00Z",
+    "metadata": {
+      "BotId": "11111111-1111-1111-1111-111111111111",
+      "BotName": "sample_agent"
+    },
+    "content": {
+      "activities": [
+        {"id":"u1","type":"message","timestampMs":1000,"from":{"role":1,"aadObjectId":"synthetic-user"},"text":"Show sample count"},
+        {"id":"s1","name":"ToolCallTrace:Started","timestampMs":2000,"value":{"toolCallId":"call-1","hiddenFilledParameters":{"body":"{\"sqlQuery\":\"SELECT COUNT(*) FROM sample\"}"}}},
+        {"id":"c1","name":"ToolCallTrace:Completed","timestampMs":2300,"value":{"toolCallId":"call-1","toolDisplayName":"sample_mcp","toolCategory":"MCP","toolCallStatus":"Completed","durationMs":300,"result":"{\"content\":[{\"text\":\"ReferenceId: synthetic\\n{\\\"columns\\\":[\\\"count\\\"],\\\"row_count\\\":1,\\\"rows\\\":[[42]],\\\"truncated\\\":false}\"}]}"}},
+        {"id":"a1","type":"message","timestampMs":2400,"from":{"role":0},"text":"There are 42 sample rows."}
+      ]
+    }
+  }
+]
