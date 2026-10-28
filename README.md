@@ -1,8 +1,44 @@
 # One agent: conversation -> MCP tool -> query table
 
+## Purpose
+
+Use this branch to investigate **one Copilot Studio agent** without deploying a service.
+You supply the environment URL and one agent ID, sign in with Azure CLI, and run a local
+PowerShell helper to turn available Dataverse transcripts into a table connecting
+**conversation -> MCP tool call -> submitted query -> result/error**. The resulting CSV
+helps you inspect what happened in a conversation, including available prompts, replies,
+durations and error evidence. This is an on-demand troubleshooting tool, not a scheduled
+collector, and it cannot recover details that were never recorded or exposed by the source.
+
 You are on **`script-template`**. This branch is a local, interactive PowerShell tool.
 It does not deploy Azure resources or run queries against your downstream database.
 For scheduled private centralized dumps, switch to **`enterprise-automation`** and read its different README.
+
+## File structure and what each part does
+
+```text
+copilot-studio-mcp-observability/
+|-- README.md                       Start here: follow the numbered setup steps
+|-- .env.example                    Blank template for your environment and one agent
+|-- .env                            Your private settings [created locally]
+|-- Export-OneAgent.ps1              Reads .env, lists agent IDs, exports exactly one agent
+|-- Get-CopilotMcpToolLogs.ps1        Fetches/parses transcripts and writes JSON/CSV/Excel
+|-- tests/
+|   |-- Test-Script.ps1              Offline synthetic checks, including one-agent filtering
+|   `-- synthetic-transcripts.json  Fabricated transcript input; no client data
+|-- exports/                        Private output directory [created when exporting]
+|   |-- synthetic.csv               Offline example table [generated]
+|   `-- one-agent.csv               Your real agent's table [generated]
+|-- .github/
+|   `-- workflows/
+|       `-- validate.yml            Runs synthetic script tests on GitHub
+`-- .gitignore                      Keeps .env and exports out of Git
+```
+
+Files marked **created locally** or **generated** are not shipped with the repository.
+For the walkthrough, edit only `.env` after copying `.env.example`; you do not need to
+edit either script. `Export-OneAgent.ps1` is the entry point you run, and it calls
+`Get-CopilotMcpToolLogs.ps1` to produce the table. Treat real exports as confidential.
 
 ## 1. Open this branch in PowerShell 7
 
