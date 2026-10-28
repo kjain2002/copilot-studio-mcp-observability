@@ -106,7 +106,7 @@ See [report consumption rules](docs/DEPLOYMENT.md#consume-reports-correctly) bef
 </details>
 
 <details>
-<summary><strong>Steps</strong></summary>
+<summary><strong>Steps — configure agent scope, deploy scheduled collection, and verify centralized reports</strong></summary>
 
 ## 1. Understand what will be deployed
 
