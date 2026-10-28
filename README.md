@@ -105,6 +105,9 @@ See [report consumption rules](docs/DEPLOYMENT.md#consume-reports-correctly) bef
 
 </details>
 
+<details>
+<summary><strong>Steps</strong></summary>
+
 ## 1. Understand what will be deployed
 
 - Azure Functions Flex Consumption with managed identity (no embedded passwords).
@@ -280,3 +283,5 @@ No rows is not sufficient verification. Alert delivery and external freshness ch
 [Client overview](docs/CLIENT-OVERVIEW.md) |
 [Detailed deployment and recovery guide](docs/DEPLOYMENT.md) |
 [Optional environment telemetry KQL](docs/environment-telemetry.kql)
+
+</details>
