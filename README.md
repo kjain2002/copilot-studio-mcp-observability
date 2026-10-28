@@ -1,4 +1,4 @@
-# One agent: conversation -> MCP tool -> query table
+# Monitoring MCP Tool Calls in a Copilot Studio Agent
 
 <details>
 <summary><strong>Purpose — trace MCP calls for ONE Copilot Studio agent</strong></summary>
@@ -68,7 +68,7 @@ Use `enterprise-automation` for scheduled collection into private centralized st
 </details>
 
 <details>
-<summary><strong>Steps</strong></summary>
+<summary><strong>Steps — configure your environment and one agent, then generate and verify the MCP-call table</strong></summary>
 
 ## 1. Open this branch in PowerShell 7
 
