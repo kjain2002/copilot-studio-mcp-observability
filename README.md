@@ -15,6 +15,59 @@ You are on **`script-template`**. This branch is a local, interactive PowerShell
 It does not deploy Azure resources or run queries against your downstream database.
 For scheduled private centralized dumps, switch to **`enterprise-automation`** and read its different README.
 
+### What the output table looks like
+
+The CSV has **21 columns**, described below. Each row represents an observed completed or failed
+tool event for your selected agent, not an entire conversation. Multiple tools in one conversation
+produce multiple rows. Consent suspensions are skipped; starts without a completion produce warnings,
+not output rows. The extractor reads tool traces; `ToolCategory` is source evidence, not an enforced
+MCP-only filter.
+
+This compact preview shows selected columns from **fabricated example rows**; it is not client data:
+
+| BotName | ConversationId | ToolCallId | ToolName | SqlQuery | Status | DurationMs | ErrorCode | HttpStatusCode |
+|---|---|---|---|---|---|---|---|---|
+| sample_agent | sample-conversation-01 | call-1 | sample_mcp | SELECT COUNT(*) FROM sample | Completed | 300 | *(blank)* | *(blank)* |
+| sample_agent | sample-conversation-01 | call-2 | sample_mcp | SELECT COUNT(*) FROM sample | Failed | 1200 | ConnectorError | *(blank)* |
+
+A failed call does not establish an HTTP 500. HTTP status is populated only if the source event
+explicitly provides it. Identifiers, query text and other fields may be unavailable in real transcripts.
+
+### Output data dictionary
+
+Types describe the logical values; CSV stores their text representations, with null/missing values
+shown as empty cells. Example values below are synthetic.
+
+| Column | Type / example | Meaning for investigating this agent's MCP calls |
+|---|---|---|
+| `ConversationId` | Text: `sample-conversation-01` | Identifies the conversation containing the tool event. Uses an activity's conversation ID when present; otherwise removes the known bot-ID suffix from the transcript name. |
+| `TurnId` | Text: `user-msg-1__agent-msg-1` | Combines the selected user-message and reply IDs. Groups calls paired to the same messages; this is a derived value, not a platform-issued turn ID. Missing message IDs leave empty components. |
+| `UserId` | Text: user object ID, or blank | Source user's Entra object ID from the selected user message, when recorded. Potentially personal data; not guaranteed for every channel. |
+| `BotName` | Text: `sample_agent` | Agent name recorded in transcript metadata (`BotName`); may be a schema-style name rather than the friendly display name. |
+| `BotId` | GUID text: `11111111-1111-1111-1111-111111111111` | Agent ID from transcript metadata. Compare with your configured `BOT_ID` to confirm every exported row belongs to the intended agent. |
+| `ToolCallTime` | ISO 8601 UTC text: `2026-01-02T10:00:00.0000000+00:00` | Time of the matched tool start. If the start is missing, uses the completion/failure event time instead. |
+| `ToolName` | Text: `sample_mcp` | Tool display name from the completion/failure event. This may identify a connector/tool grouping, not necessarily a downstream server operation. |
+| `ToolCategory` | Text: `MCP`, or blank | Source-reported tool category. Use it to inspect whether the observed tool is categorized as MCP; the exporter does not invent a category. |
+| `ToolCallId` | Text: `call-1` | Identifier used to match the tool's start with its completion/failure inside the transcript. Do not assume it is globally unique across all conversations. |
+| `SqlQuery` | Text: `SELECT COUNT(*) FROM sample` | Available query from the start event's hidden parameter body: looks for `sqlQuery`, `query` or `daxQuery` in an object; otherwise uses a text body. Despite the column name, text is not guaranteed to be SQL. Never executed by this exporter. |
+| `Status` | Text: `Completed`, `Failed`, `Unknown`, or another source status | `Failed` when the event is a failure or supplies an error code; otherwise the source `toolCallStatus`, or `Unknown`. Not an HTTP response code or proof of downstream query success. |
+| `DurationMs` | Number: `300`, or blank | Source-reported tool duration in milliseconds. The exporter does not calculate missing duration from timestamps. |
+| `QueryResult` | Text: source result or `ERROR: ConnectorError - ...` | Tool result text/serialized object, or an error-code/message summary. Limited to the first 500 characters plus a truncation marker; not a full query-result dataset. |
+| `UserMessage` | Text: `Show sample count` | Closest preceding user message selected by activity time. Context for the call, not proof that this prompt caused it. |
+| `AgentResponse` | Text: `There are 42 sample rows.` | First nonempty agent reply at/after completion and before the next user message. Blank when none fits; multiple calls may share one reply. |
+| `ErrorCode` | Text: `ConnectorError`, or blank | Explicit tool-event error code. It may be a platform/connector code rather than an HTTP status. |
+| `ErrorMessage` | Text: `Synthetic failure`, or blank | Explicit source error description, when present. May contain sensitive service or business information. |
+| `HttpStatusCode` | Source value: `404`, or blank | Only the event's explicit `httpStatusCode`. Not inferred from `Status`, `ErrorCode`, or `N/A`; blank does not mean HTTP 200. |
+| `TranscriptId` | GUID text | Dataverse transcript-row ID. Helps locate the original saved evidence; a conversation may have more than one transcript row. |
+| `CorrelationQuality` | Text: `ToolCallId; message pairing is temporal` or `MissingStart` | States whether a start matched the completion/failure. Even with a match, prompt/reply attribution is temporal, not guaranteed causal linkage. |
+| `QueryAvailability` | Text: `Observed` or `NotExposed` | `Observed` means nonempty query/body text was extracted. `NotExposed` means none was extracted, including when a start/parameter is missing; it does not prove the tool executed no query. |
+
+**Reading the evidence:** first verify `BotId`, then locate `ConversationId` and `ToolCallId`.
+Inspect `SqlQuery` alongside `QueryAvailability`, and `Status` alongside the explicit error/HTTP
+fields. Missing source evidence stays missing. The table cannot prove completeness of all tool usage.
+CSV formula-like text is prefixed with an apostrophe for spreadsheet safety. Treat prompts, replies,
+user IDs, queries and result snippets as confidential.
+
 </details>
 
 <details>
