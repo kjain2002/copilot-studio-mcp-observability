@@ -25,38 +25,38 @@ For a local ONE-agent test without deploying anything, switch to **`script-templ
 
 ```text
 copilot-studio-mcp-observability/
-├── README.md
-├── infra/
-│   ├── main.bicep
-│   ├── client.parameters.example.json
-│   └── client.parameters.json *
-├── function_app.py
-├── host.json
-├── observability/
-│   ├── __init__.py
-│   ├── dataverse.py
-│   ├── parser.py
-│   ├── collector.py
-│   └── azure_store.py
-├── docs/
-│   ├── CLIENT-OVERVIEW.md
-│   ├── DEPLOYMENT.md
-│   └── environment-telemetry.kql
-├── tests/
-│   ├── test_observability.py
-│   ├── Test-Script.ps1
-│   └── synthetic-transcripts.json
-├── .github/workflows/validate.yml
-├── requirements.txt
-├── requirements-dev.txt
-├── pyproject.toml
-├── local.settings.example.json
-├── Export-OneAgent.ps1
-├── Get-CopilotMcpToolLogs.ps1
-├── .env.example
-├── .env *
-├── .funcignore
-└── .gitignore
+├── README.md                           — Setup-to-report walkthrough
+├── infra/                              — Configure hosted monitoring
+│   ├── main.bicep                      — Create collector, storage and alerts
+│   ├── client.parameters.example.json  — Template: environment, agents, cadence
+│   └── client.parameters.json *        — Your deployment choices; edit this
+├── function_app.py                     — Start collection on your schedule
+├── host.json                           — Set job timeout and runtime logging
+├── observability/                      — Turn transcript evidence into reports
+│   ├── __init__.py                     — Group collector modules as a package
+│   ├── dataverse.py                    — Read agent inventory and transcripts
+│   ├── parser.py                       — Link conversation, tool, query, result
+│   ├── collector.py                    — Select agents; build report windows
+│   └── azure_store.py                  — Save private reports; lock checkpoints
+├── docs/                               — Explain and operate the solution
+│   ├── CLIENT-OVERVIEW.md              — Client outcomes, architecture, limits
+│   ├── DEPLOYMENT.md                   — Permissions, rollout and recovery
+│   └── environment-telemetry.kql       — Optional native telemetry investigation
+├── tests/                              — Check collection without client data
+│   ├── test_observability.py           — Test correlation, scope and recovery
+│   ├── Test-Script.ps1                 — Test the optional one-agent helper
+│   └── synthetic-transcripts.json     — Fabricated conversation/tool evidence
+├── .github/workflows/validate.yml      — Run code checks; never collect data
+├── requirements.txt                    — Libraries for Azure/API collection
+├── requirements-dev.txt                — Additional validation tools
+├── pyproject.toml                      — Lint and type-check rules
+├── local.settings.example.json        — Runtime setting reference; not deployed
+├── Export-OneAgent.ps1                 — Optional local agent discovery/export
+├── Get-CopilotMcpToolLogs.ps1           — Optional local transcript extraction
+├── .env.example                        — Template for local helper only
+├── .env *                              — Local helper values; not hosted setup
+├── .funcignore                         — Keep local data out of code publishing
+└── .gitignore                          — Keep private settings/reports out of Git
 ```
 
 `*` Created by you locally, not shipped or committed.
