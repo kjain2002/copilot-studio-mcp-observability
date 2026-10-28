@@ -1,82 +1,182 @@
-# Copilot Studio MCP observability
+# Scheduled centralized dumps for Copilot Studio agents
 
-Reusable, read-only export of **conversation -> tool invocation -> query -> result/error**.
-No client data, environment identifiers, credentials or internal meeting notes are included.
+You are on **`enterprise-automation`**. This branch deploys an Azure Functions collector that
+reads Dataverse and stores private CSV/JSON reports for **one agent, selected agents, or all accessible
+agents in one Copilot Studio environment**. Use one deployment per environment.
+For a local ONE-agent test without deploying anything, switch to **`script-template`** and follow its README.
 
-## Enterprise automation
+## 1. Understand what will be deployed
 
-Start with the [client overview](docs/CLIENT-OVERVIEW.md) and
-[deployment and operations guide](docs/DEPLOYMENT.md).
-The Azure Functions Flex Consumption implementation inventories accessible agents, scans all
-transcript pages, exports private JSON/CSV snapshots and advances a leased checkpoint only
-after a slice manifest has been saved. Four UTC schedules are supplied: monthly, weekly
-(default), daily and every-five-minute near-live polling.
+- Azure Functions Flex Consumption with managed identity (no embedded passwords).
+- Separate host/deployment and report storage accounts; private containers, no anonymous access.
+- Agent inventory, tool-call table, coverage report, checksums and checkpointed report slices.
+- Four schedules, retry/backoff, overlap replay, lease locking and exception email alerts.
+- Code and synthetic tests in GitHub; **SQL, prompts, replies, user IDs and result previews stay private**.
 
-Includes managed identity, scoped storage roles, retry/backoff, overlap replay, coverage reporting,
-report retention, runtime monitoring and an exception alert. Reports preserve the original script
-fields; the automation also records pending/consent events instead of discarding them.
-At-least-once snapshots require the documented deduplication/replacement rules.
+This is a reference implementation, not a production certification.
+The deployment uses authenticated public endpoints, **not VNet/private-endpoint isolation**.
+Review your client's data classification, networking, costs, Dataverse retention and regional
+Flex/ZRS availability first. Do not deploy until the client approves.
 
-**Validation status:** synthetic tests and static/template checks only. Live Dataverse permissions,
-connector payloads, Azure deployment, scale and production-channel behavior require tenant acceptance.
-The template is an authenticated-endpoint baseline, not a private-network/compliance certification.
+## 2. Open the branch and test locally
 
-## Branches
-
-- `script-template`: standalone PowerShell for an interactive investigation.
-- `enterprise-automation`: Azure-hosted environment-wide collection, private centralized
-  reports, checkpoints, tests and deployment templates. This is the recommended client starting point.
-
-## Script quick start
-
-Requires PowerShell 7.2+, Azure CLI, and Dataverse read access to conversation transcripts.
-Sign in to the intended tenant; the script does not change agents or execute extracted queries.
+Install Git, Python **3.12**, PowerShell **7.2+**, Azure CLI with Bicep, and
+[Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local).
 
 ```powershell
-az login --tenant YOUR_TENANT_ID
-.\Get-CopilotMcpToolLogs.ps1 -DataverseUrl https://YOURORG.crm.dynamics.com -DaysBack 7 -Format Csv
-.\Get-CopilotMcpToolLogs.ps1 -DataverseUrl https://YOURORG.crm.dynamics.com -BotSchemaName YOUR_BOT_SCHEMA -Format Json
+git clone --branch enterprise-automation https://github.com/kjain2002/copilot-studio-mcp-observability.git
+Set-Location .\copilot-studio-mcp-observability
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p 'test_*.py' -v
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pyright --pythonpath .\.venv\Scripts\python.exe
 .\tests\Test-Script.ps1
+az bicep build --file .\infra\main.bicep --stdout | Out-Null
 ```
 
-Omit the agent filter to read transcripts for all agents **visible to the signed-in identity**.
-JSON preserves full query, user prompt and agent reply. Result summaries are bounded to 500 characters.
-CSV/Excel protect spreadsheet cells against formula execution. Excel explicitly requires the
-optional `ImportExcel` module; there is no silent format fallback. Empty JSON is always `[]`.
+Already cloned? Use `git switch enterprise-automation` instead of cloning.
+Expected: tests pass and Bicep compiles. These checks do **not** connect to your environment.
 
-The original fields are preserved: ConversationId, TurnId, UserId, BotName, BotId,
-ToolCallTime, ToolName, ToolCategory, ToolCallId, SqlQuery, Status, DurationMs,
-QueryResult, UserMessage, AgentResponse. Additional fields expose error evidence,
-transcript identity, correlation quality and missing-query state.
+## 3. Gather the configuration values
 
-## Important limits
+Ask your Azure and Power Platform administrators for:
 
-- Transcript saving normally follows **30 minutes of conversation inactivity**. Five-minute polling
-  cannot make a running conversation appear immediately.
-- Default transcript retention is **30 days**. A monthly job alone can lose data in a 31-day
-  month or after a missed run. Extend source retention before choosing monthly-only collection.
-- `ToolCallTrace:*` is an observed payload shape from a working integration, **not a documented,
-  guaranteed event contract**. Validate with sanitized samples from each target connector/harness.
-- A query hidden by the platform or managed MCP cannot be recovered by this collector.
-  `NotExposed` is not an empty successful query. Status such as `N/A` is not an HTTP code.
-- Message pairing is temporal, not proof of causal attribution. Missing starts are retained as
-  such; unmatched starts emit warnings. Environment inventory is in the automation branch.
-- Recording disabled, deleted transcripts, inaccessible agents, unsupported activity shapes,
-  consent pauses and missing events prevent complete historical coverage.
+| Value | Where/how to get it |
+|---|---|
+| Tenant GUID | Microsoft Entra admin center -> Overview -> Directory (tenant) ID |
+| Azure subscription GUID | Azure portal -> Subscriptions |
+| Existing deployment resource group | Azure portal -> Resource groups; requires deployment/RBAC permission |
+| Power Platform environment GUID | Power Platform admin center -> Environments -> target environment -> details |
+| Dataverse URL | Same environment details -> Environment URL, e.g. `https://YOURORG.crm.dynamics.com` |
+| Agent `botid` GUID(s) | Dataverse Agent table, or the inventory command below |
+| Operations email | Approved recipient for runtime exception alerts |
 
-## Data handling
+The Dataverse URL is **not** the Copilot Studio web page URL.
+Tenant ID, environment ID and agent botid are different identifiers.
+Transcript recording must be enabled. Azure RBAC does not grant Dataverse Read access.
 
-**Public code does not mean public telemetry.** Exports include SQL, prompts, replies, user IDs,
-errors and potentially business data in result summaries. Store them only in approved private
-locations. Do not upload exports, real transcripts or local settings to issues, CI artifacts or Git.
-`.gitignore` is a convenience, not a data-loss-prevention control.
+To list agent IDs interactively, copy `.env.example` to `.env`, fill `TENANT_ID` and
+`DATAVERSE_URL`, sign in, then run:
 
-## Sources
+```powershell
+Copy-Item .\.env.example .\.env
+notepad .\.env
+az login --tenant YOUR_TENANT_GUID --allow-no-subscriptions
+.\Export-OneAgent.ps1 -ListAgents
+```
 
-- [Transcript schema, save timing and retention](https://learn.microsoft.com/microsoft-copilot-studio/analytics-transcripts-powerapps)
-- [Dataverse transcript table](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/conversationtranscript)
-- [Agent inventory table](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/bot)
-- [Environment-level telemetry (preview)](https://learn.microsoft.com/microsoft-copilot-studio/advanced-environment-level-agent-telemetry)
+Copy the `botid` GUIDs, not agent display names or schema names.
+This `.env` is **only for the interactive helper**, not the hosted Function configuration.
 
-This is a reusable reference implementation, not a Microsoft product, support commitment or
-compliance certification. Validate in the client's tenant before production adoption.
+## 4. Create your deployment parameters
+
+```powershell
+Copy-Item .\infra\client.parameters.example.json .\infra\client.parameters.json
+notepad .\infra\client.parameters.json
+```
+
+Replace every `YOUR_*` placeholder. This file is Git-ignored. Choose the scope using `agentIds`:
+
+```json
+"agentIds": { "value": ["YOUR_AGENT_BOT_GUID"] }
+```
+
+- **One agent:** one GUID.
+- **Selected agents:** `["FIRST_BOT_GUID", "SECOND_BOT_GUID"]`.
+- **All accessible agents:** `[]` (empty array). This is an intentional environment-wide opt-in.
+
+The selected IDs must exist in the identity's visible inventory or collection fails.
+Selection filters **exports**, not Dataverse read permissions: the collector still scans environment
+transcripts. Apply a least-privilege Dataverse role if read isolation is required.
+
+Choose a `mode`:
+
+| Mode | UTC execution | Notes |
+|---|---|---|
+| `weekly` | Monday 02:00 | Recommended initial setting |
+| `daily` | Daily 02:00 | Faster review |
+| `monthly` | First of month 02:00 | Actually extend source retention to >= 40 days first; set `sourceRetentionDays` accordingly |
+| `near-live` | Every five minutes | Polling only, not a real-time feed |
+
+Source transcripts normally save after **30 minutes of inactivity**. Five-minute polling cannot
+remove that latency. Default source retention is 30 days; a monthly-only job can otherwise lose data.
+`sourceRetentionDays` declares a prerequisite; it does not change Dataverse deletion policies.
+`reportRetentionDays` controls the separate private report storage lifecycle.
+
+## 5. Preview, approve and create the infrastructure
+
+```powershell
+az login --tenant YOUR_TENANT_GUID
+az account set --subscription YOUR_SUBSCRIPTION_GUID
+az deployment group what-if --resource-group YOUR_RESOURCE_GROUP --template-file .\infra\main.bicep --parameters '@infra\client.parameters.json'
+# Only after reviewing costs/resources and obtaining approval:
+az deployment group create --resource-group YOUR_RESOURCE_GROUP --template-file .\infra\main.bicep --parameters '@infra\client.parameters.json'
+```
+
+Save deployment outputs: Function app name, managed identity object ID, reports account/container.
+`namePrefix` is lowercase alphanumeric, 3-10 characters. No real identifiers belong in public Git.
+
+## 6. Authorize the Function in Dataverse
+
+A Power Platform administrator must register the Function managed identity as an application user
+in **that environment** and grant organization-level Read on Agent (`bot`) and
+Conversation Transcript (`conversationtranscript`), plus platform-required baseline access.
+Use its application/client ID where the provisioning flow asks for an application ID, not its object ID.
+Confirm that the target tenant supports the managed-identity application-user flow.
+Do not grant System Administrator or substitute a hardcoded secret as a workaround.
+See the [detailed deployment guide](docs/DEPLOYMENT.md#grant-dataverse-access).
+
+## 7. Publish the code and validate an actual run
+
+```powershell
+func azure functionapp publish YOUR_FUNCTION_APP_NAME --python
+```
+
+In Azure portal -> Function App -> Configuration, confirm `ENVIRONMENT_ID`, `DATAVERSE_URL`,
+`AGENT_IDS` (comma-separated GUIDs; empty means all), `COLLECTION_MODE`, `COLLECTION_SCHEDULE`
+and reports storage settings. Bicep sets them from your parameter file.
+No `.env` file is uploaded to configure the hosted Function.
+
+Use the Function portal's authenticated **Test/Run** for `export_environment` to invoke once,
+or wait for the selected schedule. The runtime requires Azure managed identity; a local
+`az login` does not make the hosted Function work on your laptop.
+Run a safe published-channel MCP conversation, then allow transcript save delay.
+
+## 8. Verify the centralized dump
+
+An authorized operator with Storage Blob Data Reader can list private reports:
+
+```powershell
+az storage blob list --account-name YOUR_REPORTS_ACCOUNT --container-name reports --auth-mode login --prefix environments/YOUR_ENVIRONMENT_GUID/ --query '[].name' -o tsv
+```
+
+Use Azure Storage Explorer with Entra sign-in to inspect:
+
+- `agents.json`: selected accessible agent inventory (including agents without conversations).
+- `calls.csv` / `calls.json`: conversation -> MCP tool -> query -> result/error table.
+- `coverage.json`: missing query/start/completion evidence; no trace does not prove no tool use.
+- `manifest.json`: committed slice, scope, counts and checksums.
+- `run.json`: completed-run summary; `checkpoint.json`: last committed watermark and scope.
+
+For one/selected agents, verify **every exported BotId is in your configured list**.
+Prove at least one known conversation/tool/query and a failure case in the actual published channel.
+No rows is not sufficient verification. Alert delivery and external freshness checks must also be tested.
+
+## 9. Operate safely
+
+- Reports are **at-least-once snapshots**, not concatenatable monthly rollups.
+  Follow [snapshot replacement rules](docs/DEPLOYMENT.md#consume-reports-correctly).
+- Agent scope is persisted in the checkpoint. Changing scope is rejected rather than silently
+  skipping newly selected history. Use a new isolated deployment/report storage for a new scope,
+  or have an operator plan an explicit checkpoint reset/backfill and downstream dataset reset.
+- One deployment covers one environment. Repeat with a unique prefix/resource group for another.
+- Reduce slice size if volume exceeds memory or transcript caps. Measure Dataverse throttling.
+- Missing source queries/HTTP codes cannot be recovered; `ToolCallTrace` is an observed payload
+  adapter, not a guaranteed documented contract.
+- Before production, complete [the acceptance checklist and recovery runbook](docs/DEPLOYMENT.md).
+  VNet isolation, external freshness alerts and tenant-specific operational signoff remain client work.
+
+[Client overview](docs/CLIENT-OVERVIEW.md) |
+[Detailed deployment and recovery guide](docs/DEPLOYMENT.md) |
+[Optional environment telemetry KQL](docs/environment-telemetry.kql)

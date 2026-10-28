@@ -69,6 +69,14 @@ another Python version, but CI explicitly uses 3.12.
 
 ## Select mode
 
+Set Bicep `agentIds` to one or multiple Agent `botid` GUIDs to limit exports; `[]` means all
+accessible agents. The hosted `AGENT_IDS` setting is a comma-separated representation.
+Inventory output is scoped, but transcript reads still scan the environment. This is not a
+Dataverse authorization boundary. Unknown selected IDs fail before any checkpoint advancement.
+Checkpoint state persists the selection and rejects scope changes; use a new isolated deployment
+for a different scope, or plan an explicit checkpoint reset/backfill plus downstream dataset reset.
+Existing checkpoints without `AgentIds` remain compatible with all-agent collection only.
+
 Reapply Bicep with `mode=monthly|weekly|daily|near-live`. It sets the matching six-field UTC schedule.
 Monthly requires `sourceRetentionDays=40` or greater **after** the administrator has actually changed
 the source deletion policy. This parameter is a declared prerequisite, not a retention-policy change.

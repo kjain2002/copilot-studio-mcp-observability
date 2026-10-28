@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": { "value": "mcplogs" },
+    "environmentId": { "value": "YOUR_POWER_PLATFORM_ENVIRONMENT_GUID" },
+    "dataverseUrl": { "value": "https://YOURORG.crm.dynamics.com" },
+    "agentIds": { "value": ["YOUR_AGENT_BOT_GUID"] },
+    "alertEmail": { "value": "YOUR_OPERATIONS_EMAIL" },
+    "mode": { "value": "weekly" },
+    "initialDays": { "value": 7 },
+    "sourceRetentionDays": { "value": 30 },
+    "reportRetentionDays": { "value": 90 }
+  }
+}

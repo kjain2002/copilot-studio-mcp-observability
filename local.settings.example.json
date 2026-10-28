@@ -5,6 +5,7 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "ENVIRONMENT_ID": "00000000-0000-0000-0000-000000000000",
     "DATAVERSE_URL": "https://YOURORG.crm.dynamics.com",
+    "AGENT_IDS": "",
     "REPORTS_ACCOUNT_URL": "https://YOURACCOUNT.blob.core.windows.net",
     "REPORTS_CONTAINER": "reports",
     "COLLECTION_MODE": "weekly",

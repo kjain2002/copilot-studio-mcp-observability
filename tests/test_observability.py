@@ -194,6 +194,66 @@ class FakeStore:
 class CollectorTests(unittest.TestCase):
     now = datetime(2026, 1, 2, tzinfo=UTC)
 
+    def test_selected_agents_excludes_other_agents_and_scopes_inventory(self):
+        first = sample()
+        second = sample()
+        other_id = "33333333-3333-3333-3333-333333333333"
+        second["metadata"]["BotId"] = other_id
+        second["name"] = "other_conversation_" + other_id
+        store = FakeStore()
+        result = collect(FakeSource([first, second]), store,
+                         Settings(ENV, initial_days=1, agent_ids=(first["metadata"]["BotId"],)), self.now)
+        manifest = json.loads(store.files[result["Manifests"][0]])
+        self.assertEqual(manifest["AgentCount"], 1)
+        self.assertEqual(manifest["RecordCount"], 1)
+        path = next(f["Path"] for f in manifest["Files"] if f["Path"].endswith("calls.json"))
+        self.assertEqual({row["BotId"] for row in json.loads(store.files[path])},
+                         {first["metadata"]["BotId"]})
+        self.assertEqual(store.state["AgentIds"], [first["metadata"]["BotId"]])
+
+    def test_multiple_selected_agents_are_exported(self):
+        first = sample()
+        second = sample()
+        other_id = "33333333-3333-3333-3333-333333333333"
+        second["metadata"]["BotId"] = other_id
+        second["name"] = "other_conversation_" + other_id
+        source = FakeSource([first, second])
+        original_pages = source.pages
+
+        def pages(entity, select, filter_text=None, orderby=None):
+            if entity == "bots":
+                yield [{"botid": first["metadata"]["BotId"]}, {"botid": other_id}]
+            else:
+                yield from original_pages(entity, select, filter_text, orderby)
+
+        source.pages = pages
+        store = FakeStore()
+        result = collect(source, store, Settings(
+            ENV, initial_days=1, agent_ids=(first["metadata"]["BotId"], other_id)), self.now)
+        manifest = json.loads(store.files[result["Manifests"][0]])
+        self.assertEqual(manifest["RecordCount"], 2)
+
+    def test_unknown_selected_agent_fails_without_checkpoint(self):
+        store = FakeStore()
+        with self.assertRaisesRegex(ValueError, "absent from accessible inventory"):
+            collect(FakeSource(), store, Settings(
+                ENV, agent_ids=("33333333-3333-3333-3333-333333333333",)), self.now)
+        self.assertEqual(store.state, {})
+
+    def test_scope_change_blocks_silent_history_loss(self):
+        store = FakeStore()
+        store.state = {"SchemaVersion": "1.0", "EnvironmentId": ENV,
+                       "Watermark": "2026-01-01T00:00:00Z", "AgentIds": []}
+        with self.assertRaisesRegex(ValueError, "scope changed"):
+            collect(FakeSource(), store, Settings(
+                ENV, agent_ids=("11111111-1111-1111-1111-111111111111",)), self.now)
+
+    def test_agent_ids_validated_and_canonicalized(self):
+        with self.assertRaises(ValueError):
+            Settings(ENV, agent_ids=("not-a-guid",))
+        value = "11111111-1111-1111-1111-111111111111"
+        self.assertEqual(Settings(ENV, agent_ids=(value, value)).agent_ids, (value,))
+
     def test_inventory_includes_agents_without_transcripts_and_writes_complete_batch(self):
         source, store = FakeSource(), FakeStore()
         result = collect(source, store, Settings(ENV, initial_days=1), self.now)

@@ -18,6 +18,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'File')]
     [string]$TranscriptsPath,
     [string]$BotSchemaName,
+    [string]$BotId,
     [ValidateRange(1, 3650)][int]$DaysBack = 7,
     [ValidateSet('Json', 'Csv', 'Excel')][string]$Format = 'Json',
     [string]$OutputPath
@@ -41,6 +42,7 @@ function Get-Time($Activity) {
 function Get-Records($Transcripts) {
     foreach ($t in $Transcripts) {
         $meta = ConvertTo-Object $t.metadata "transcript metadata"
+        if ($BotId -and $meta.BotId -ne $BotId) { continue }
         if ($BotSchemaName -and $meta.BotName -ne $BotSchemaName) { continue }
         $content = ConvertTo-Object $t.content "transcript content"
         if ($null -eq $content.activities) { throw 'Transcript has no activities array; verify recording and payload contract.' }

@@ -8,5 +8,8 @@ exports
 requirements-dev.txt
 pyproject.toml
 Get-CopilotMcpToolLogs.ps1
+Export-OneAgent.ps1
+.env
+.env.example
 *.md
 local.settings.json

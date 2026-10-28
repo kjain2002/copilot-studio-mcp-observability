@@ -49,6 +49,10 @@ The inventory includes accessible agents with no transcript activity. One paged 
 transcript scan is more efficient than querying once per agent. Transcript calls are mapped to
 inventory IDs; unmatched/deleted agents remain visible, rather than being dropped.
 
+Optionally configure one or multiple agent `botid` GUIDs to scope exports; empty selection exports
+all accessible agents. Selected IDs must match accessible inventory. Filtering does not reduce the
+identity's Dataverse read privileges. Scope changes require an isolated deployment or planned backfill.
+
 ## Reliability and interpretation
 
 - Fixed half-open `modifiedon` windows, paginated reads, bounded retry/backoff and timeouts.

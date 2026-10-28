@@ -8,6 +8,8 @@ param location string = resourceGroup().location
 @description('Power Platform environment GUID, not the Dataverse organization ID.')
 param environmentId string
 param dataverseUrl string
+@description('Agent botid GUIDs to export. Empty array intentionally exports all accessible agents.')
+param agentIds array = []
 @allowed(['monthly', 'weekly', 'daily', 'near-live'])
 param mode string = 'weekly'
 @minValue(1)
@@ -154,6 +156,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
         { name: 'APPLICATIONINSIGHTS_AUTHENTICATION_STRING', value: 'Authorization=AAD' }
         { name: 'ENVIRONMENT_ID', value: environmentId }
         { name: 'DATAVERSE_URL', value: dataverseUrl }
+        { name: 'AGENT_IDS', value: join(agentIds, ',') }
         { name: 'REPORTS_ACCOUNT_URL', value: reportsStorage.properties.primaryEndpoints.blob }
         { name: 'REPORTS_CONTAINER', value: reports.name }
         { name: 'COLLECTION_MODE', value: mode }

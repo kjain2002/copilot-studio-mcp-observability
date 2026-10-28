@@ -9,3 +9,4 @@ exports/
 *.zip
 infra/main.json
 .ruff_cache/
+infra/client.parameters.json

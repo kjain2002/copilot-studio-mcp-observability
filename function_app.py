@@ -24,6 +24,7 @@ def export_environment(timer: func.TimerRequest) -> None:
         slice_hours=int(os.environ.get("SLICE_HOURS", "24")),
         max_transcripts=int(os.environ.get("MAX_TRANSCRIPTS_PER_SLICE", "10000")),
         source_retention_days=int(os.environ.get("SOURCE_RETENTION_DAYS", "30")),
+        agent_ids=tuple(value.strip() for value in os.environ.get("AGENT_IDS", "").split(",") if value.strip()),
     )
     if timer.past_due:
         logger.warning("Collection timer is past due; recovering from the committed watermark")

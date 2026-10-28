@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
-from .parser import FIELDS, parse_transcript
+from .parser import FIELDS, object_value, parse_transcript
 
 SCHEDULES = {
     "monthly": "0 0 2 1 * *",
@@ -37,10 +37,13 @@ class Settings:
     slice_hours: int = 24
     max_transcripts: int = 10000
     source_retention_days: int = 30
+    agent_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         import uuid
         uuid.UUID(self.environment_id)
+        canonical = tuple(sorted({str(uuid.UUID(value)) for value in self.agent_ids}))
+        object.__setattr__(self, "agent_ids", canonical)
         if self.mode not in SCHEDULES:
             raise ValueError("Mode must be monthly, weekly, daily or near-live")
         if not (1 <= self.initial_days <= self.source_retention_days):
@@ -87,6 +90,8 @@ def collect(source: Source, store: Store, settings: Settings,
     state = store.checkpoint()
     if state and (state.get("EnvironmentId") != settings.environment_id or state.get("SchemaVersion") != "1.0"):
         raise ValueError("Checkpoint environment or schema mismatch")
+    if state and tuple(state.get("AgentIds", [])) != settings.agent_ids:
+        raise ValueError("Checkpoint agent scope changed; use an isolated deployment or plan explicit reset/backfill")
     watermark = parse_time(state["Watermark"]) if state else end - timedelta(days=settings.initial_days)
     if watermark > end:
         raise ValueError("Checkpoint is ahead of collection time")
@@ -98,6 +103,10 @@ def collect(source: Source, store: Store, settings: Settings,
         guard()
         agents.extend(page)
     inventory_ids = {str(a["botid"]).lower() for a in agents}
+    if settings.agent_ids:
+        if not set(settings.agent_ids).issubset(inventory_ids):
+            raise ValueError("Selected agent IDs are absent from accessible inventory; check IDs and permissions")
+        agents = [a for a in agents if str(a["botid"]).lower() in settings.agent_ids]
     run_key = hashlib.sha256((settings.environment_id + iso(end)).encode()).hexdigest()[:24]
     prefix = f"environments/{settings.environment_id}/runs/{end:%Y/%m/%d}/{run_key}"
     store.put(prefix + "/agents.json", json_bytes(agents), "application/json")
@@ -120,6 +129,12 @@ def collect(source: Source, store: Store, settings: Settings,
                 count += 1
                 if count > settings.max_transcripts:
                     raise ValueError("Transcript slice cap exceeded; reduce SLICE_HOURS before retry")
+                if settings.agent_ids:
+                    meta = object_value(transcript.get("metadata"), "metadata")
+                    if not meta.get("BotId"):
+                        raise ValueError("Transcript metadata lacks BotId; cannot safely apply selected-agent scope")
+                    if str(meta["BotId"]).lower() not in settings.agent_ids:
+                        continue
                 parsed, item = parse_transcript(transcript, settings.environment_id)
                 item["InventoryMatch"] = str(item["BotId"]).lower() in inventory_ids
                 rows.extend(parsed)
@@ -141,6 +156,7 @@ def collect(source: Source, store: Store, settings: Settings,
             "SchemaVersion": "1.0", "EnvironmentId": settings.environment_id,
             "WindowStart": iso(cursor), "WindowEnd": iso(upper), "CollectedAt": iso(end),
             "Mode": settings.mode, "AgentsPath": prefix + "/agents.json",
+            "AgentIds": list(settings.agent_ids),
             "AgentCount": len(agents), "TranscriptCount": count, "RecordCount": len(rows),
             "Coverage": {
                 "NoObservedToolTrace": sum(c["ToolEvents"] == 0 for c in coverage),
@@ -156,11 +172,13 @@ def collect(source: Source, store: Store, settings: Settings,
         if upper > watermark:
             guard()
             store.advance({"SchemaVersion": "1.0", "EnvironmentId": settings.environment_id,
+                           "AgentIds": list(settings.agent_ids),
                            "Watermark": iso(upper), "LastManifest": manifest_path})
             watermark = upper
         manifest_paths.append(manifest_path)
         cursor = upper
     result = {"SchemaVersion": "1.0", "EnvironmentId": settings.environment_id,
+              "AgentIds": list(settings.agent_ids),
               "WindowStart": iso(start), "WindowEnd": iso(end), "CollectedAt": iso(end),
               "AgentCount": len(agents), "Manifests": manifest_paths}
     guard()
