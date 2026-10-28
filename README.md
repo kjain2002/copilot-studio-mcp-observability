@@ -67,6 +67,9 @@ Use `enterprise-automation` for scheduled collection into private centralized st
 
 </details>
 
+<details>
+<summary><strong>Steps</strong></summary>
+
 ## 1. Open this branch in PowerShell 7
 
 Install [PowerShell 7.2+](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
@@ -202,3 +205,5 @@ or upload them to public issues. This public repository contains only code and s
 This reference implementation requires tenant validation; no Azure resources are deployed by these steps.
 
 [Microsoft transcript schema, save timing and retention](https://learn.microsoft.com/microsoft-copilot-studio/analytics-transcripts-powerapps)
+
+</details>
