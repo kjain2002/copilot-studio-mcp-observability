@@ -1,0 +1,18 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "ENVIRONMENT_ID": "00000000-0000-0000-0000-000000000000",
+    "DATAVERSE_URL": "https://YOURORG.crm.dynamics.com",
+    "REPORTS_ACCOUNT_URL": "https://YOURACCOUNT.blob.core.windows.net",
+    "REPORTS_CONTAINER": "reports",
+    "COLLECTION_MODE": "weekly",
+    "COLLECTION_SCHEDULE": "0 0 2 * * 1",
+    "INITIAL_DAYS": "7",
+    "OVERLAP_HOURS": "48",
+    "SOURCE_RETENTION_DAYS": "30",
+    "SLICE_HOURS": "24",
+    "MAX_TRANSCRIPTS_PER_SLICE": "10000"
+  }
+}

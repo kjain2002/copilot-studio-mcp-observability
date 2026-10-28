@@ -1,0 +1,12 @@
+.git*
+.venv
+__pycache__
+tests
+docs
+infra
+exports
+requirements-dev.txt
+pyproject.toml
+Get-CopilotMcpToolLogs.ps1
+*.md
+local.settings.json

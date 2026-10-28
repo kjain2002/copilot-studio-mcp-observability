@@ -1,0 +1,23 @@
+// Optional diagnostics for the managed-environment telemetry PREVIEW.
+// Run in the agent telemetry Application Insights resource, not necessarily
+// the collector's runtime-monitoring resource. Query text is not guaranteed.
+let EnvironmentId = "YOUR_ENVIRONMENT_GUID";
+dependencies
+| where timestamp >= ago(7d)
+| where tostring(customDimensions["env.id"]) == EnvironmentId
+| where tostring(customDimensions["gen_ai.operation.name"]) == "execute_tool"
+| project
+    timestamp,
+    EnvironmentId = tostring(customDimensions["env.id"]),
+    BotId = tostring(customDimensions["gen_ai.agent.id"]),
+    ConversationId = tostring(customDimensions["gen_ai.conversation.id"]),
+    TraceId = operation_Id,
+    SpanId = id,
+    ParentSpanId = operation_ParentId,
+    ToolName = tostring(customDimensions["gen_ai.tool.name"]),
+    success,
+    ObservedResultCode = resultCode,
+    ObservedErrorType = tostring(customDimensions["error.type"]),
+    duration,
+    customDimensions
+| order by timestamp desc

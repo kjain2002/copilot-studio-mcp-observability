@@ -3,6 +3,24 @@
 Reusable, read-only export of **conversation -> tool invocation -> query -> result/error**.
 No client data, environment identifiers, credentials or internal meeting notes are included.
 
+## Enterprise automation
+
+Start with the [client overview](docs/CLIENT-OVERVIEW.md) and
+[deployment and operations guide](docs/DEPLOYMENT.md).
+The Azure Functions Flex Consumption implementation inventories accessible agents, scans all
+transcript pages, exports private JSON/CSV snapshots and advances a leased checkpoint only
+after a slice manifest has been saved. Four UTC schedules are supplied: monthly, weekly
+(default), daily and every-five-minute near-live polling.
+
+Includes managed identity, scoped storage roles, retry/backoff, overlap replay, coverage reporting,
+report retention, runtime monitoring and an exception alert. Reports preserve the original script
+fields; the automation also records pending/consent events instead of discarding them.
+At-least-once snapshots require the documented deduplication/replacement rules.
+
+**Validation status:** synthetic tests and static/template checks only. Live Dataverse permissions,
+connector payloads, Azure deployment, scale and production-channel behavior require tenant acceptance.
+The template is an authenticated-endpoint baseline, not a private-network/compliance certification.
+
 ## Branches
 
 - `script-template`: standalone PowerShell for an interactive investigation.
