@@ -24,21 +24,21 @@ For scheduled private centralized dumps, switch to **`enterprise-automation`** a
 
 ```text
 copilot-studio-mcp-observability/
-├── README.md
-├── .env.example
-├── .env *
-├── Export-OneAgent.ps1
-├── Get-CopilotMcpToolLogs.ps1
-├── tests/
-│   ├── Test-Script.ps1
-│   └── synthetic-transcripts.json
-├── exports/ *
-│   ├── synthetic.csv *
-│   └── one-agent.csv *
+├── README.md                       — Follow setup through table verification
+├── .env.example                    — Template: tenant, environment, one agent
+├── .env *                          — Fill your connection and agent ID here
+├── Export-OneAgent.ps1              — Run this: select/export exactly one agent
+├── Get-CopilotMcpToolLogs.ps1        — Link transcript, MCP call, query, result
+├── tests/                          — Verify extraction before tenant access
+│   ├── Test-Script.ps1              — Test .env setup and one-agent filtering
+│   └── synthetic-transcripts.json  — Fabricated conversation and MCP query
+├── exports/ *                      — Your private generated tables
+│   ├── synthetic.csv *             — Offline example; not your agent's data
+│   └── one-agent.csv *             — Real conversation/tool/query evidence
 ├── .github/
 │   └── workflows/
-│       └── validate.yml
-└── .gitignore
+│       └── validate.yml             — Run synthetic checks on code changes
+└── .gitignore                      — Keep .env and reports out of public Git
 ```
 
 `*` Created locally during setup or export; not shipped or committed.
