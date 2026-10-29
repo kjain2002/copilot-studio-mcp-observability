@@ -3,7 +3,8 @@
 .SYNOPSIS
 Exports observed Copilot Studio tool calls from Dataverse transcripts.
 .DESCRIPTION
-Read-only, interactive export. Without BotSchemaName, reads all accessible agents.
+Read-only, interactive export. Without BotId or BotSchemaName, reads all accessible agents.
+BotId selects the Dataverse Agent row through the transcript's agent lookup, not metadata.BotId.
 ToolCallTrace is an observed payload, not a guaranteed public event contract.
 Exports contain sensitive user content, queries and result previews. Store privately.
 .EXAMPLE
@@ -24,6 +25,10 @@ param(
     [string]$OutputPath
 )
 $ErrorActionPreference = 'Stop'
+$selectedAgentId = [guid]::Empty
+if ($BotId -and -not [guid]::TryParse($BotId, [ref]$selectedAgentId)) {
+    throw 'BotId must be a Dataverse Agent botid GUID.'
+}
 
 function ConvertTo-Object($Value, [string]$Context) {
     if ($Value -is [string]) {
@@ -41,8 +46,19 @@ function Get-Time($Activity) {
 
 function Get-Records($Transcripts) {
     foreach ($t in $Transcripts) {
+        $agentId = [guid]::Empty
+        $lookup = $t.'_bot_conversationtranscriptid_value'
+        if ($lookup) {
+            if (-not [guid]::TryParse([string]$lookup, [ref]$agentId)) {
+                throw 'Invalid transcript agent lookup; refusing to guess agent identity.'
+            }
+        } elseif ($BotId) {
+            throw 'Transcript agent lookup is missing; exact-agent filtering requires _bot_conversationtranscriptid_value. No metadata/schema fallback is allowed.'
+        } else {
+            Write-Warning 'Transcript agent lookup is missing; AgentId will be blank. Metadata BotId is not the Agent row ID.'
+        }
+        if ($BotId -and $agentId -ne $selectedAgentId) { continue }
         $meta = ConvertTo-Object $t.metadata "transcript metadata"
-        if ($BotId -and $meta.BotId -ne $BotId) { continue }
         if ($BotSchemaName -and $meta.BotName -ne $BotSchemaName) { continue }
         $content = ConvertTo-Object $t.content "transcript content"
         if ($null -eq $content.activities) { throw 'Transcript has no activities array; verify recording and payload contract.' }
@@ -95,7 +111,7 @@ function Get-Records($Transcripts) {
             $result = $v.result
             if ($result -is [System.Collections.IDictionary]) { $result = ConvertTo-Json -InputObject $result -Depth 50 -Compress }
             $summary = if ($v.errorCode) { "ERROR: $($v.errorCode) - $($v.errorMessage)" } else { [string]$result }
-            if ($summary.Length -gt 500) { $summary = $summary.Substring(0, 500) + ' (truncated)' }
+
             [pscustomobject][ordered]@{
                 ConversationId = $conversationId
                 TurnId = "$($user.id)__$($reply.id)"
@@ -118,6 +134,7 @@ function Get-Records($Transcripts) {
                 TranscriptId = $t.conversationtranscriptid
                 CorrelationQuality = if ($start) { 'ToolCallId; message pairing is temporal' } else { 'MissingStart' }
                 QueryAvailability = if ($query) { 'Observed' } else { 'NotExposed' }
+                AgentId = if ($lookup) { $agentId.ToString() } else { $null }
             }
             $starts.Remove($v.toolCallId)
         }
@@ -125,6 +142,7 @@ function Get-Records($Transcripts) {
     }
 }
 
+$botNames = @{}
 if ($PSCmdlet.ParameterSetName -eq 'File') {
     $transcripts = Get-Content -LiteralPath $TranscriptsPath -Raw | ConvertFrom-Json -AsHashtable
 } else {
@@ -138,8 +156,10 @@ if ($PSCmdlet.ParameterSetName -eq 'File') {
     $headers = @{ Authorization = "Bearer $token"; Accept = 'application/json'; Prefer = 'odata.maxpagesize=500'; 'OData-Version' = '4.0'; 'OData-MaxVersion' = '4.0' }
     $since = [DateTime]::UtcNow.AddDays(-$DaysBack).ToString('yyyy-MM-ddTHH:mm:ssZ')
     $until = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-    $filter = [uri]::EscapeDataString("modifiedon ge $since and modifiedon lt $until")
-    $next = "$DataverseUrl/api/data/v9.2/conversationtranscripts?`$select=conversationtranscriptid,name,metadata,content,modifiedon&`$filter=$filter&`$orderby=modifiedon,conversationtranscriptid"
+    $filterText = "modifiedon ge $since and modifiedon lt $until"
+    if ($BotId) { $filterText += " and _bot_conversationtranscriptid_value eq $($selectedAgentId.ToString())" }
+    $filter = [uri]::EscapeDataString($filterText)
+    $next = "$DataverseUrl/api/data/v9.2/conversationtranscripts?`$select=conversationtranscriptid,name,metadata,content,modifiedon,_bot_conversationtranscriptid_value&`$filter=$filter&`$orderby=modifiedon,conversationtranscriptid"
     $transcripts = [System.Collections.Generic.List[object]]::new()
     while ($next) {
         if (-not $next.StartsWith("$DataverseUrl/api/data/v9.2/", [StringComparison]::OrdinalIgnoreCase)) {
@@ -149,10 +169,25 @@ if ($PSCmdlet.ParameterSetName -eq 'File') {
         foreach ($t in $response.value) { $transcripts.Add($t) }
         $next = $response.'@odata.nextLink'
     }
+    $botNames = @{}
+    $agentIds = $transcripts | ForEach-Object { $_._bot_conversationtranscriptid_value } | Where-Object { $_ } | Sort-Object -Unique
+    foreach ($aid in $agentIds) {
+        $botUrl = "$DataverseUrl/api/data/v9.2/bots($aid)?`$select=name,schemaname"
+        try {
+            $bot = Invoke-RestMethod -Uri $botUrl -Headers $headers -MaximumRedirection 0
+            if ($bot.name) { $botNames[$aid.ToString().ToLower()] = $bot.name }
+        } catch {}
+    }
     $token = $null
     $headers = $null
 }
 $records = @(Get-Records $transcripts)
+foreach ($r in $records) {
+    $aid = if ($r.AgentId) { $r.AgentId.ToString().ToLower() } else { $null }
+    if ($aid -and $botNames.ContainsKey($aid)) {
+        $r.BotName = $botNames[$aid]
+    }
+}
 if (-not $OutputPath) {
     $extension = @{ Json = 'json'; Csv = 'csv'; Excel = 'xlsx' }[$Format]
     $OutputPath = Join-Path (Get-Location) "exports\copilot-mcp-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')).$extension"
@@ -177,7 +212,7 @@ if ($Format -eq 'Json') {
     } elseif ($safe.Count) {
         $safe | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding utf8
     } else {
-        '"ConversationId","TurnId","UserId","BotName","BotId","ToolCallTime","ToolName","ToolCategory","ToolCallId","SqlQuery","Status","DurationMs","QueryResult","UserMessage","AgentResponse","ErrorCode","ErrorMessage","HttpStatusCode","TranscriptId","CorrelationQuality","QueryAvailability"' |
+        '"ConversationId","TurnId","UserId","BotName","BotId","ToolCallTime","ToolName","ToolCategory","ToolCallId","SqlQuery","Status","DurationMs","QueryResult","UserMessage","AgentResponse","ErrorCode","ErrorMessage","HttpStatusCode","TranscriptId","CorrelationQuality","QueryAvailability","AgentId"' |
             Set-Content -LiteralPath $OutputPath -Encoding utf8
     }
 }

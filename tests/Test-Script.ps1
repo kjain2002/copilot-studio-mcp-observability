@@ -22,7 +22,33 @@ try {
     ) | Set-Content $envFile
     $null = & (Join-Path $root 'Export-OneAgent.ps1') -EnvFile $envFile -TranscriptsPath (Join-Path $PSScriptRoot 'synthetic-transcripts.json')
     $csvRows = @(Import-Csv (Join-Path $temp 'one-agent.csv'))
-    if ($csvRows.Count -ne 1 -or $csvRows[0].BotId -ne '11111111-1111-1111-1111-111111111111') { throw 'One-agent .env export failed.' }
+    if ($csvRows.Count -ne 1 -or $csvRows[0].AgentId -ne '11111111-1111-1111-1111-111111111111') { throw 'One-agent .env lookup filter failed.' }
+    if ($csvRows[0].BotId -ne 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa') { throw 'Source metadata BotId was not preserved separately.' }
+    $html = Get-Content -LiteralPath (Join-Path $temp 'one-agent.html') -Raw
+    if ($html -notmatch 'const embeddedCsvBase64 = "([A-Za-z0-9+/=]+)";') { throw 'HTML report did not embed CSV data.' }
+    $embedded = [Convert]::FromBase64String($Matches[1])
+    $original = [IO.File]::ReadAllBytes((Join-Path $temp 'one-agent.csv'))
+    if ([Convert]::ToBase64String($embedded) -ne [Convert]::ToBase64String($original)) { throw 'HTML snapshot differs from exported CSV.' }
+    $fixture = Join-Path $temp 'identity-cases.json'
+    $sample = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'synthetic-transcripts.json') -Raw | ConvertFrom-Json -AsHashtable)
+    $other = ($sample[0] | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable)
+    $other.'_bot_conversationtranscriptid_value' = '33333333-3333-3333-3333-333333333333'
+    ConvertTo-Json -InputObject @($sample[0], $other) -Depth 50 | Set-Content $fixture
+    $null = & (Join-Path $root 'Get-CopilotMcpToolLogs.ps1') -TranscriptsPath $fixture -BotId '{11111111-1111-1111-1111-111111111111}' -OutputPath $output
+    $selected = @(Get-Content $output -Raw | ConvertFrom-Json)
+    if ($selected.Count -ne 1 -or $selected[0].AgentId -ne '11111111-1111-1111-1111-111111111111') { throw 'Same metadata ID leaked another Agent row or GUID normalization failed.' }
+    $other.Remove('_bot_conversationtranscriptid_value')
+    ConvertTo-Json -InputObject @($other) -Depth 50 | Set-Content $fixture
+    $rejectedLookup = $false
+    try { $null = & (Join-Path $root 'Get-CopilotMcpToolLogs.ps1') -TranscriptsPath $fixture -BotId 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' -OutputPath $output }
+    catch { $rejectedLookup = $_.Exception.Message -like '*lookup is missing*' }
+    if (-not $rejectedLookup) { throw 'Missing lookup incorrectly fell back to metadata identity.' }
+    $other.'_bot_conversationtranscriptid_value' = 'not-a-guid'
+    ConvertTo-Json -InputObject @($other) -Depth 50 | Set-Content $fixture
+    $rejectedLookup = $false
+    try { $null = & (Join-Path $root 'Get-CopilotMcpToolLogs.ps1') -TranscriptsPath $fixture -BotId '11111111-1111-1111-1111-111111111111' -OutputPath $output }
+    catch { $rejectedLookup = $_.Exception.Message -like '*Invalid transcript agent lookup*' }
+    if (-not $rejectedLookup) { throw 'Invalid lookup was not rejected.' }
     $null = & (Join-Path $root 'Get-CopilotMcpToolLogs.ps1') -TranscriptsPath (Join-Path $PSScriptRoot 'synthetic-transcripts.json') -BotId '33333333-3333-3333-3333-333333333333' -OutputPath $output
     if ((Get-Content $output -Raw).Trim() -ne '[]') { throw 'Agent filter leaked another agent.' }
     Add-Content $envFile 'BOT_ID=duplicate'
@@ -36,6 +62,6 @@ try {
     if ((Get-Content $output -Raw).Trim() -ne '[]') { throw 'Empty JSON must be an array.' }
     Write-Host 'Script tests passed.'
 } finally {
-    Remove-Item -LiteralPath (Join-Path $temp 'result.json'), (Join-Path $temp 'empty.json'), (Join-Path $temp '.env'), (Join-Path $temp 'one-agent.csv') -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $temp 'result.json'), (Join-Path $temp 'empty.json'), (Join-Path $temp '.env'), (Join-Path $temp 'one-agent.csv'), (Join-Path $temp 'one-agent.html'), (Join-Path $temp 'identity-cases.json') -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $temp
 }

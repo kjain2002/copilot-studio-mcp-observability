@@ -42,9 +42,11 @@ copilot-studio-mcp-observability/
 │   ├── CLIENT-OVERVIEW.md              — Client outcomes, architecture, limits
 │   ├── DEPLOYMENT.md                   — Permissions, rollout and recovery
 │   └── environment-telemetry.kql       — Optional native telemetry investigation
+├── View-OneAgent.html                  — Local HTML trace viewer template
 ├── tests/                              — Check collection without client data
 │   ├── test_observability.py           — Test correlation, scope and recovery
 │   ├── Test-Script.ps1                 — Test the optional one-agent helper
+│   ├── Test-Viewer.cjs                 — Test HTML viewer parsing and grouping
 │   └── synthetic-transcripts.json     — Fabricated conversation/tool evidence
 ├── .github/workflows/validate.yml      — Run code checks; never collect data
 ├── requirements.txt                    — Libraries for Azure/API collection
@@ -89,11 +91,13 @@ copilot-studio-mcp-observability/
 | File | Contribution / when to use it |
 |---|---|
 | [tests/test_observability.py](tests/test_observability.py) | Checks correlation, selected-agent filtering, retries, report commits and checkpoint safety using synthetic/mocked inputs—not a live tenant. |
-| [tests/Test-Script.ps1](tests/Test-Script.ps1), [tests/synthetic-transcripts.json](tests/synthetic-transcripts.json) | Prove the optional interactive exporter can turn fabricated transcript evidence into a one-agent table before using real data. |
+| [tests/Test-Script.ps1](tests/Test-Script.ps1), [tests/synthetic-transcripts.json](tests/synthetic-transcripts.json) | Prove the optional interactive exporter can turn fabricated transcript evidence into a one-agent table before using real data. Tests agent identity filtering via the Dataverse lookup field. |
+| [tests/Test-Viewer.cjs](tests/Test-Viewer.cjs) | Tests the HTML viewer's CSV parsing, conversation grouping, search/filter and result-table rendering against edge cases. |
 | [docs/CLIENT-OVERVIEW.md](docs/CLIENT-OVERVIEW.md) | Explains what monitoring delivers, its architecture and evidence limits to a client. |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Details Dataverse authorization, report consumption, replay/recovery and production acceptance. |
 | [docs/environment-telemetry.kql](docs/environment-telemetry.kql) | Optional investigation of native environment telemetry; separate from the transcript collector and not a guarantee of query visibility. |
-| [Export-OneAgent.ps1](Export-OneAgent.ps1), [Get-CopilotMcpToolLogs.ps1](Get-CopilotMcpToolLogs.ps1), [.env.example](.env.example) | Optional local helpers for discovering agent IDs or testing one agent. Their local `.env` does **not** configure scheduled collection. |
+| [Export-OneAgent.ps1](Export-OneAgent.ps1), [Get-CopilotMcpToolLogs.ps1](Get-CopilotMcpToolLogs.ps1), [.env.example](.env.example) | Optional local helpers for discovering agent IDs or testing one agent. The exporter also generates a private HTML trace alongside the CSV. Their local `.env` does **not** configure scheduled collection. |
+| [View-OneAgent.html](View-OneAgent.html) | Local HTML trace viewer template. The exporter embeds CSV data into a copy of this file for offline conversation-level inspection with search, filtering and result tables. |
 | [requirements.txt](requirements.txt) | Installs the Azure/HTTP libraries the hosted collector needs to authenticate, read transcripts and write reports. |
 | [requirements-dev.txt](requirements-dev.txt), [pyproject.toml](pyproject.toml), [.github/workflows/validate.yml](.github/workflows/validate.yml) | Configure repeatable code checks in development and GitHub; CI does not collect tenant data or deploy Azure resources. |
 | [.gitignore](.gitignore), [.funcignore](.funcignore) | Exclude local configuration/outputs from Git or Function publishing. They are safeguards, not a substitute for checking what you share. |

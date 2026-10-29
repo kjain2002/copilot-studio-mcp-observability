@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>MCP Trace Viewer</title>
+<style>
+:root {
+  --bg: #f2f4f8;
+  --surface: #ffffff;
+  --surface-dim: #eaecf3;
+  --border: #d5dae5;
+  --border-light: #e6eaf0;
+  --text: #171d2d;
+  --text-2: #555e72;
+  --text-3: #8891a4;
+  --accent: #4856d6;
+  --accent-dim: #e8ebff;
+  --ok: #0e8a6d;
+  --ok-dim: #e4f7f0;
+  --err: #c93131;
+  --err-dim: #fdeeed;
+  --sec-user: #7c5cfc;
+  --sec-user-bg: #f4f1ff;
+  --sec-input: #2563eb;
+  --sec-input-bg: #eef4ff;
+  --sec-result: #0881a2;
+  --sec-result-bg: #eafaff;
+  --sec-resp: #078a5e;
+  --sec-resp-bg: #eafaf4;
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0f16;
+    --surface: #141924;
+    --surface-dim: #1a2030;
+    --border: #262f42;
+    --border-light: #1e2636;
+    --text: #dfe5f0;
+    --text-2: #8b95aa;
+    --text-3: #5c657a;
+    --accent: #7b84ee;
+    --accent-dim: #1c2048;
+    --ok: #34d399;
+    --ok-dim: #0c2820;
+    --err: #f87171;
+    --err-dim: #2a1518;
+    --sec-user: #a78bfa;
+    --sec-user-bg: #1a1630;
+    --sec-input: #60a5fa;
+    --sec-input-bg: #111d33;
+    --sec-result: #22d3ee;
+    --sec-result-bg: #0c1e28;
+    --sec-resp: #34d399;
+    --sec-resp-bg: #0a2420;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0f16;
+  --surface: #141924;
+  --surface-dim: #1a2030;
+  --border: #262f42;
+  --border-light: #1e2636;
+  --text: #dfe5f0;
+  --text-2: #8b95aa;
+  --text-3: #5c657a;
+  --accent: #7b84ee;
+  --accent-dim: #1c2048;
+  --ok: #34d399;
+  --ok-dim: #0c2820;
+  --err: #f87171;
+  --err-dim: #2a1518;
+  --sec-user: #a78bfa;
+  --sec-user-bg: #1a1630;
+  --sec-input: #60a5fa;
+  --sec-input-bg: #111d33;
+  --sec-result: #22d3ee;
+  --sec-result-bg: #0c1e28;
+  --sec-resp: #34d399;
+  --sec-resp-bg: #0a2420;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.55; }
+button, input, label { font: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- Header --- */
+.header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+.header-sub { color: var(--text-2); font-size: 13px; margin-top: 2px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.upload-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--radius-sm);
+  background: var(--accent); color: #fff; font-weight: 500; font-size: 13px;
+  cursor: pointer; transition: opacity .15s;
+}
+.upload-label:hover { opacity: .88; }
+.upload-label input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.btn-clear {
+  padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2); font-size: 13px; cursor: pointer;
+}
+.btn-clear:hover { background: var(--surface-dim); }
+.search-input {
+  flex: 1; min-width: 180px; max-width: 380px; padding: 7px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--text); font-size: 13px;
+}
+.search-input::placeholder { color: var(--text-3); }
+.filter-label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.filter-label input[type=checkbox] { accent-color: var(--err); }
+.tz-select {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer;
+}
+.status-bar { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; align-items: center; }
+.status-msg { font-size: 13px; color: var(--text-2); }
+.status-msg.error { color: var(--err); font-weight: 600; }
+.stat-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  background: var(--surface-dim); color: var(--text-2);
+}
+.stat-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.stat-chip .dot.d-accent { background: var(--accent); }
+.stat-chip .dot.d-ok { background: var(--ok); }
+.stat-chip .dot.d-err { background: var(--err); }
+
+/* --- Layout --- */
+.layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: calc(100vh - 140px); }
+.sidebar { border-right: 1px solid var(--border); background: var(--surface); padding: 16px; overflow-y: auto; max-height: calc(100vh - 140px); }
+.sidebar h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin-bottom: 10px; }
+.conv-list { display: grid; gap: 6px; }
+.conv-btn {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light); background: transparent; color: inherit;
+  cursor: pointer; transition: background .12s, border-color .12s;
+}
+.conv-btn:hover { background: var(--surface-dim); }
+.conv-btn[aria-current=true] { border-color: var(--accent); background: var(--accent-dim); }
+.conv-name {
+  font-family: var(--mono); font-size: 12px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conv-bot { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-meta { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+.conv-meta .fail-count { color: var(--err); font-weight: 500; }
+.main-area { padding: 24px; overflow-y: auto; max-height: calc(100vh - 140px); min-width: 0; }
+
+/* --- Conversation header --- */
+.conv-header { margin-bottom: 24px; }
+.conv-header h2 { font-size: 15px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+.session-id-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.session-id {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  padding: 6px 12px; background: var(--surface-dim); border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.conv-summary { font-size: 13px; color: var(--text-2); margin-top: 8px; }
+.caveat { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+
+/* --- Call card --- */
+.call-card {
+  margin-bottom: 20px; padding: 20px;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+}
+.call-card.failed { border-color: var(--err); border-left-width: 3px; }
+.card-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border-light); margin-bottom: 16px;
+}
+.call-num { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.tool-label { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.cat-tag {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 4px; background: var(--accent-dim); color: var(--accent);
+}
+.card-head-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.status-pill {
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+}
+.status-pill.ok { background: var(--ok-dim); color: var(--ok); }
+.status-pill.err { background: var(--err-dim); color: var(--err); }
+.card-time { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+
+/* --- Trace sections --- */
+.trace-sections { display: grid; gap: 12px; }
+.trace-sec {
+  padding: 12px 14px; border-radius: var(--radius-sm); border-left: 3px solid;
+}
+.trace-sec.user    { border-color: var(--sec-user);   background: var(--sec-user-bg); }
+.trace-sec.input   { border-color: var(--sec-input);  background: var(--sec-input-bg); }
+.trace-sec.result  { border-color: var(--sec-result); background: var(--sec-result-bg); }
+.trace-sec.response { border-color: var(--sec-resp);  background: var(--sec-resp-bg); }
+.trace-sec.error-sec { border-color: var(--err); background: var(--err-dim); }
+.sec-label {
+  display: block; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 6px;
+}
+.user .sec-label    { color: var(--sec-user); }
+.input .sec-label   { color: var(--sec-input); }
+.result .sec-label  { color: var(--sec-result); }
+.response .sec-label { color: var(--sec-resp); }
+.error-sec .sec-label { color: var(--err); }
+.sec-body {
+  font-size: 13px; line-height: 1.65;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.sec-body.code {
+  font-family: var(--mono); font-size: 12.5px;
+  padding: 8px 10px; border-radius: 4px;
+  background: var(--surface-dim);
+}
+.sec-body.prose { font-family: var(--font); }
+.empty-val { color: var(--text-3); font-style: italic; }
+.sec-meta { margin-bottom: 8px; font-size: 12px; color: var(--text-2); }
+
+/* --- Result table --- */
+.table-wrap { max-height: 380px; overflow: auto; border-radius: 4px; }
+.result-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.result-table th {
+  padding: 7px 10px; text-align: left; font-weight: 600; font-size: 11px;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  background: var(--surface-dim); color: var(--text-2);
+  border-bottom: 2px solid var(--border); position: sticky; top: 0;
+}
+.result-table td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border-light);
+  vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 340px;
+}
+.truncated-note { font-size: 11px; color: var(--text-3); margin-top: 6px; font-style: italic; }
+
+/* --- Raw fields --- */
+details { margin-top: 14px; }
+details summary {
+  cursor: pointer; padding: 6px 0; font-size: 12px; font-weight: 600;
+  color: var(--text-3); letter-spacing: 0.02em;
+}
+details summary:hover { color: var(--text-2); }
+.fields-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.fields-table th {
+  width: 160px; padding: 6px 10px; text-align: left; font-weight: 600;
+  background: var(--surface-dim); color: var(--text-2);
+  border: 1px solid var(--border-light); vertical-align: top; white-space: nowrap;
+}
+.fields-table td {
+  padding: 6px 10px; border: 1px solid var(--border-light);
+  vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--mono); font-size: 11.5px; max-width: 500px;
+}
+
+/* --- Landing / empty --- */
+.landing { max-width: 520px; margin: 60px auto; text-align: center; }
+.landing h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.landing p { font-size: 14px; color: var(--text-2); line-height: 1.6; }
+.landing .flow-hint { margin-top: 16px; font-size: 13px; color: var(--text-3); }
+.landing .flow-hint span { padding: 0 4px; }
+.no-match { padding: 40px 20px; text-align: center; color: var(--text-3); }
+
+/* --- Responsive --- */
+@media (max-width: 720px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { max-height: 220px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .main-area { max-height: none; padding: 16px; }
+  .header { padding: 16px; }
+  .card-head { gap: 6px 8px; }
+  .card-head-right { margin-left: 0; }
+  .conv-header h2 { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>MCP Tool Call Traces</h1>
+  <div class="header-sub">View each tool call: what the user asked, what query was passed, what came back, and how the agent responded.</div>
+  <div class="toolbar">
+    <label class="upload-label">Load CSV<input id="file" type="file" accept=".csv,text/csv"></label>
+    <button id="clear" class="btn-clear" type="button">Clear</button>
+    <input id="search" class="search-input" type="search" placeholder="Search tools, queries, IDs, results..." disabled>
+    <label class="filter-label"><input id="failed" type="checkbox" disabled> Failed only</label>
+    <select id="tz" class="tz-select" title="Display timezone">
+      <option value="local">Local time</option>
+      <option value="UTC" selected>UTC</option>
+      <option value="America/Los_Angeles">US Pacific</option>
+      <option value="America/Denver">US Mountain</option>
+      <option value="America/Chicago">US Central</option>
+      <option value="America/New_York">US Eastern</option>
+      <option value="Europe/London">London</option>
+      <option value="Europe/Berlin">Berlin</option>
+      <option value="Asia/Kolkata">India</option>
+      <option value="Asia/Shanghai">China</option>
+      <option value="Asia/Tokyo">Japan</option>
+      <option value="Australia/Sydney">Sydney</option>
+    </select>
+  </div>
+  <div class="status-bar">
+    <span id="message" class="status-msg" role="status" aria-live="polite">No CSV loaded.</span>
+    <span id="stats"></span>
+  </div>
+</div>
+<div class="layout">
+  <div class="sidebar">
+    <h2>Sessions</h2>
+    <div id="conversations" class="conv-list" role="navigation" aria-label="Conversations"></div>
+  </div>
+  <div class="main-area" id="trace"></div>
+</div>
+<script>
+"use strict";
+const embeddedCsvBase64 = "";
+
+function parseCsv(text) {
+  text = text.replace(/^﻿/, "");
+  const records = [];
+  let record = [], field = "", quoted = false, closed = false, started = false;
+  const endField = () => { record.push(field); field = ""; closed = false; started = false; };
+  const endRecord = () => {
+    endField();
+    if (record.some(value => value !== "")) records.push(record);
+    record = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else { quoted = false; closed = true; }
+      } else field += char;
+    } else if (char === ",") endField();
+    else if (char === "\r" || char === "\n") {
+      if (char === "\r" && text[i + 1] === "\n") i++;
+      endRecord();
+    } else if (char === '"' && !started && !closed) {
+      quoted = true; started = true;
+    } else {
+      if (closed || char === '"') throw new Error("Malformed CSV: unexpected text or quote in a field.");
+      field += char; started = true;
+    }
+  }
+  if (quoted) throw new Error("Malformed CSV: an enclosed field has no closing quote.");
+  if (started || closed || field || record.length) endRecord();
+  if (!records.length) throw new Error("The CSV is empty. Select an exporter-generated CSV with a header.");
+  const headers = records.shift();
+  if (headers.some(header => !header) || new Set(headers).size !== headers.length)
+    throw new Error("CSV headers must be nonempty and unique.");
+  const required = ["ConversationId", "ToolCallTime", "ToolName", "Status", "SqlQuery", "QueryResult", "UserMessage", "AgentResponse"];
+  const missing = required.filter(header => !headers.includes(header));
+  if (missing.length) throw new Error("Missing required columns: " + missing.join(", "));
+  return records.map((values, index) => {
+    if (values.length !== headers.length) throw new Error(`CSV record ${index + 2} has ${values.length} fields; expected ${headers.length}.`);
+    const row = Object.create(null);
+    headers.forEach((header, i) => { row[header] = values[i]; });
+    return row;
+  });
+}
+
+function groupRows(rows, search = "", failedOnly = false) {
+  const groups = new Map(), term = search.toLowerCase();
+  rows.forEach((row, index) => {
+    if (failedOnly && row.Status !== "Failed") return;
+    if (term && !Object.values(row).some(value => value.toLowerCase().includes(term))) return;
+    const key = JSON.stringify([row.AgentId || row.BotId || "", row.ConversationId || `missing-row-${index}`]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  });
+  for (const calls of groups.values()) {
+    calls.sort((a, b) => {
+      const left = Date.parse(a.ToolCallTime), right = Date.parse(b.ToolCallTime);
+      return Number.isFinite(left) && Number.isFinite(right) ? left - right : 0;
+    });
+  }
+  return groups;
+}
+
+function isTableShape(v) {
+  return v && Array.isArray(v.columns) && Array.isArray(v.rows) &&
+    v.columns.length && v.columns.every(c => typeof c === "string") &&
+    v.rows.every(r => Array.isArray(r) && r.length === v.columns.length);
+}
+
+function extractTables(text) {
+  const lines = text.split("\n"), tables = [], meta = [];
+  for (const line of lines) {
+    const idx = line.indexOf("{");
+    if (idx >= 0) {
+      try {
+        const obj = JSON.parse(line.substring(idx));
+        if (isTableShape(obj)) {
+          tables.push({ columns: obj.columns, rows: obj.rows });
+          const prefix = line.substring(0, idx).trim().replace(/:$/, "");
+          if (prefix) meta.push(prefix);
+          continue;
+        }
+      } catch {}
+    }
+    if (line.trim()) meta.push(line);
+  }
+  return { tables, metadata: meta.join("\n") };
+}
+
+function parsePartialTable(text) {
+  var best = null, from = 0;
+  while (true) {
+    var ci = text.indexOf('"columns"', from);
+    if (ci < 0) break;
+    var t = tryExtractTable(text, ci);
+    if (t && (!best || t.rows.length > best.rows.length || (t.rows.length === best.rows.length && t.columns.length > best.columns.length))) best = t;
+    from = ci + 9;
+  }
+  return best;
+}
+
+function tryExtractTable(text, colPos) {
+  var cs = text.indexOf('[', colPos);
+  if (cs < 0) return null;
+  var ce = text.indexOf(']', cs);
+  var columns;
+  if (ce < 0) {
+    var nl = text.indexOf('\n', cs);
+    var slice = nl < 0 ? text.substring(cs) : text.substring(cs, nl);
+    columns = [];
+    var re = /"((?:[^"\\]|\\.)*)"/g;
+    var m;
+    while ((m = re.exec(slice)) !== null) columns.push(m[1]);
+    if (!columns.length) return null;
+    return { columns: columns, rows: [] };
+  }
+  try { columns = JSON.parse(text.substring(cs, ce + 1)); } catch { return null; }
+  if (!Array.isArray(columns) || !columns.length || !columns.every(function(c) { return typeof c === 'string'; })) return null;
+  var ri = text.indexOf('"rows"', ce);
+  if (ri < 0 || ri > colPos + 500) return { columns: columns, rows: [] };
+  var rs = text.indexOf('[[', ri);
+  if (rs < 0) return { columns: columns, rows: [] };
+  var rows = [], pos = rs + 1;
+  while (pos < text.length) {
+    while (pos < text.length && ' ,\t\r\n'.indexOf(text[pos]) >= 0) pos++;
+    if (pos >= text.length || text[pos] !== '[') break;
+    var depth = 0, end = pos, inStr = false;
+    for (; end < text.length; end++) {
+      if (inStr) { if (text[end] === '\\') { end++; continue; } if (text[end] === '"') inStr = false; continue; }
+      if (text[end] === '"') { inStr = true; continue; }
+      if (text[end] === '[') depth++;
+      if (text[end] === ']') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) break;
+    try {
+      var row = JSON.parse(text.substring(pos, end + 1));
+      if (Array.isArray(row) && row.length === columns.length) rows.push(row);
+      else break;
+    } catch { break; }
+    pos = end + 1;
+  }
+  return { columns: columns, rows: rows };
+}
+
+function unwrapContentText(raw) {
+  var m = raw.match(/"text"\s*:\s*"((?:[^"\\]|\\[\s\S])*)/);
+  if (!m) return null;
+  return m[1]
+    .replace(/\\u([0-9a-fA-F]{4})/g, function(_, h) { return String.fromCharCode(parseInt(h, 16)); })
+    .replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+}
+
+function resultEvidence(raw) {
+  if (!raw) return { text: "", table: null, truncated: false };
+  const truncated = raw.includes("(truncated)");
+  let value;
+  try { value = JSON.parse(raw); }
+  catch {
+    var unwrapped = unwrapContentText(raw);
+    if (unwrapped) {
+      var extracted = extractTables(unwrapped);
+      if (extracted.tables.length) {
+        return { text: raw, display: unwrapped, table: extracted.tables[0], tables: extracted.tables, metadata: extracted.metadata, truncated };
+      }
+      var partial = parsePartialTable(unwrapped);
+      if (partial) {
+        var metaLines = unwrapped.split("\n").filter(function(ln) {
+          var t = ln.trim();
+          return t && t[0] !== "{" && t[0] !== "[";
+        });
+        return { text: raw, display: unwrapped, table: partial, tables: [partial], metadata: metaLines.join("\n"), truncated };
+      }
+      return { text: raw, display: unwrapped, table: null, truncated };
+    }
+    return { text: raw, table: null, truncated };
+  }
+  if (!truncated && isTableShape(value)) {
+    return { text: JSON.stringify(value, null, 2), table: { columns: value.columns, rows: value.rows }, truncated };
+  }
+  if (value && Array.isArray(value.content)) {
+    const texts = value.content.filter(c => c && typeof c.text === "string").map(c => c.text);
+    if (texts.length) {
+      const joined = texts.join("\n");
+      if (!truncated) {
+        const extracted = extractTables(joined);
+        if (extracted.tables.length) {
+          return { text: joined, table: extracted.tables[0], tables: extracted.tables, metadata: extracted.metadata, truncated };
+        }
+      }
+      return { text: joined, table: null, truncated };
+    }
+  }
+  return { text: JSON.stringify(value, null, 2), table: null, truncated };
+}
+
+function formatTime(iso, tz) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const opts = { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZoneName: "short" };
+  if (tz && tz !== "local") opts.timeZone = tz;
+  try { return d.toLocaleString("en-US", opts); }
+  catch { return iso; }
+}
+
+function el(tag, text, cls) {
+  const n = document.createElement(tag);
+  if (text != null) n.textContent = text;
+  if (cls) n.className = cls;
+  return n;
+}
+
+function renderTable(tbl) {
+  const wrap = el("div", undefined, "table-wrap");
+  const table = el("table", undefined, "result-table");
+  const thead = el("thead"), hrow = el("tr");
+  tbl.columns.forEach(c => hrow.append(el("th", c)));
+  thead.append(hrow); table.append(thead);
+  const tbody = el("tbody");
+  tbl.rows.forEach(vals => {
+    const tr = el("tr");
+    vals.forEach(v => tr.append(el("td", typeof v === "string" ? v : JSON.stringify(v))));
+    tbody.append(tr);
+  });
+  table.append(tbody); wrap.append(table);
+  return wrap;
+}
+
+function traceSection(type, label, content, opts) {
+  const sec = el("div", undefined, "trace-sec " + type);
+  sec.append(el("span", label, "sec-label"));
+  if (opts && (opts.tables || opts.table)) {
+    if (opts.metadata) sec.append(el("div", opts.metadata, "sec-body prose sec-meta"));
+    const tables = opts.tables || [opts.table];
+    tables.forEach(t => sec.append(renderTable(t)));
+    if (opts.truncated) sec.append(el("div", "Result truncated at source export. Full data not available.", "truncated-note"));
+    return sec;
+  }
+  if (!content) {
+    sec.append(el("span", "(Not recorded)", "sec-body empty-val"));
+    return sec;
+  }
+  const body = el("div", content, "sec-body" + (opts && opts.code ? " code" : " prose"));
+  sec.append(body);
+  if (opts && opts.truncated) sec.append(el("div", "Result truncated at source export.", "truncated-note"));
+  return sec;
+}
+
+function renderCall(row, index, tz) {
+  const card = el("article", undefined, "call-card" + (row.Status === "Failed" ? " failed" : ""));
+  const head = el("div", undefined, "card-head");
+  head.append(el("span", `#${index + 1}`, "call-num"));
+  head.append(el("span", row.ToolName || "(Tool not recorded)", "tool-label"));
+  if (row.ToolCategory) head.append(el("span", row.ToolCategory, "cat-tag"));
+  const right = el("div", undefined, "card-head-right");
+  const isOk = row.Status !== "Failed";
+  const pill = el("span", row.Status || "Unknown", "status-pill " + (isOk ? "ok" : "err"));
+  right.append(pill);
+  const dur = row.DurationMs && Number.isFinite(Number(row.DurationMs))
+    ? (Number(row.DurationMs) >= 1000 ? (Number(row.DurationMs) / 1000).toFixed(1) + "s" : row.DurationMs + "ms")
+    : null;
+  if (dur) right.append(el("span", dur, "card-time"));
+  if (row.ToolCallTime) right.append(el("span", formatTime(row.ToolCallTime, tz), "card-time"));
+  head.append(right);
+  card.append(head);
+
+  const sections = el("div", undefined, "trace-sections");
+  sections.append(traceSection("user", "User Query", row.UserMessage));
+  sections.append(traceSection("input", "Query Passed to Tool", row.SqlQuery, { code: true }));
+
+  const evidence = resultEvidence(row.QueryResult);
+  if (evidence.tables && evidence.tables.length) {
+    sections.append(traceSection("result", "Results Returned", null, { tables: evidence.tables, metadata: evidence.metadata, truncated: evidence.truncated }));
+  } else if (evidence.table) {
+    sections.append(traceSection("result", "Results Returned", null, { table: evidence.table, truncated: evidence.truncated }));
+  } else {
+    const resultText = evidence.display != null ? evidence.display : evidence.text;
+    sections.append(traceSection("result", "Results Returned", resultText || null, { code: !!resultText, truncated: evidence.truncated }));
+  }
+
+  sections.append(traceSection("response", "Agent Response", row.AgentResponse));
+
+  if (row.ErrorCode || row.ErrorMessage || row.HttpStatusCode) {
+    const errText = [
+      row.ErrorCode ? "Code: " + row.ErrorCode : null,
+      row.ErrorMessage ? "Message: " + row.ErrorMessage : null,
+      row.HttpStatusCode ? "HTTP: " + row.HttpStatusCode : null
+    ].filter(Boolean).join("\n");
+    sections.append(traceSection("error-sec", "Error Details", errText, { code: true }));
+  }
+  card.append(sections);
+
+  const details = el("details");
+  details.append(el("summary", "All exported fields"));
+  const tbl = el("table", undefined, "fields-table");
+  for (const [key, value] of Object.entries(row)) {
+    const tr = el("tr");
+    tr.append(el("th", key));
+    var display = key === "ToolCallTime" && value ? formatTime(value, tz) : (value || "(Not recorded)");
+    tr.append(el("td", display));
+    tbl.append(tr);
+  }
+  details.append(tbl);
+  card.append(details);
+  return card;
+}
+
+if (typeof document !== "undefined") {
+  const byId = id => document.getElementById(id);
+  let rows = [], selected = null, loadVersion = 0;
+
+  function message(text, error) {
+    byId("message").textContent = text;
+    byId("message").className = "status-msg" + (error ? " error" : "");
+  }
+
+  function refresh() {
+    const groups = groupRows(rows, byId("search").value, byId("failed").checked);
+    if (!groups.has(selected)) selected = groups.keys().next().value;
+    byId("conversations").replaceChildren();
+    byId("trace").replaceChildren();
+    byId("stats").replaceChildren();
+
+    const totalCalls = [...groups.values()].reduce((s, c) => s + c.length, 0);
+    const totalFailed = [...groups.values()].reduce((s, c) => s + c.filter(r => r.Status === "Failed").length, 0);
+    if (rows.length) {
+      const chip = (label, dotCls) => {
+        const c = el("span", undefined, "stat-chip");
+        const d = el("span", undefined, "dot " + dotCls);
+        c.append(d, document.createTextNode(" " + label));
+        return c;
+      };
+      byId("stats").append(
+        chip(groups.size + " session" + (groups.size !== 1 ? "s" : ""), "d-accent"),
+        chip(totalCalls + " call" + (totalCalls !== 1 ? "s" : ""), "d-ok"),
+        chip(totalFailed + " failed", "d-err")
+      );
+    }
+
+    for (const [key, calls] of groups) {
+      const btn = el("button", undefined, "conv-btn");
+      btn.type = "button";
+      var agentLabel = calls[0].BotName || "";
+      var agentIdVal = calls[0].AgentId || calls[0].BotId || "";
+      if (agentLabel && agentIdVal) agentLabel += " (" + agentIdVal + ")";
+      else if (!agentLabel && agentIdVal) agentLabel = agentIdVal;
+      if (agentLabel) btn.append(el("div", agentLabel, "conv-bot"));
+      const nameEl = el("div", calls[0].ConversationId || "(No ID)", "conv-name");
+      nameEl.title = calls[0].ConversationId || "";
+      btn.append(nameEl);
+      const failCount = calls.filter(r => r.Status === "Failed").length;
+      const metaEl = el("div", undefined, "conv-meta");
+      metaEl.append(document.createTextNode(calls.length + " call" + (calls.length !== 1 ? "s" : "")));
+      if (failCount) {
+        metaEl.append(document.createTextNode(" · "));
+        metaEl.append(el("span", failCount + " failed", "fail-count"));
+      }
+      btn.append(metaEl);
+      btn.setAttribute("aria-current", String(key === selected));
+      btn.addEventListener("click", () => { selected = key; refresh(); });
+      byId("conversations").append(btn);
+    }
+
+    if (!groups.size) {
+      if (rows.length) {
+        byId("trace").append(el("div", undefined, "no-match"));
+        byId("trace").firstChild.append(el("h2", "No calls match your filters."), el("p", "Try a different search term or uncheck the failed-only filter."));
+      } else {
+        const landing = el("div", undefined, "landing");
+        landing.append(el("h2", "Load a CSV to explore traces"));
+        landing.append(el("p", "Select your exported CSV above. Each conversation shows the full flow of every MCP tool call."));
+        const hint = el("div", undefined, "flow-hint");
+        hint.innerHTML = "<span>User Query</span> &rarr; <span>Tool Input</span> &rarr; <span>Results</span> &rarr; <span>Agent Response</span>";
+        landing.append(hint);
+        byId("trace").append(landing);
+      }
+      return;
+    }
+
+    const calls = groups.get(selected);
+    const hdr = el("div", undefined, "conv-header");
+    hdr.append(el("h2", "Conversation Trace"));
+    const idRow = el("div", undefined, "session-id-row");
+    idRow.append(el("span", "Session:", ""));
+    idRow.append(el("code", calls[0].ConversationId || "(Not recorded)", "session-id"));
+    hdr.append(idRow);
+    const failedInConv = calls.filter(r => r.Status === "Failed").length;
+    const parts = [calls.length + " tool call" + (calls.length !== 1 ? "s" : "")];
+    if (failedInConv) parts.push(failedInConv + " failed");
+    var headerAgentId = calls[0].AgentId || calls[0].BotId || "";
+    if (calls[0].BotName) {
+      var agentStr = "Agent: " + calls[0].BotName;
+      if (headerAgentId) agentStr += " (" + headerAgentId + ")";
+      parts.unshift(agentStr);
+    } else if (headerAgentId) {
+      parts.unshift("Agent: " + headerAgentId);
+    }
+    hdr.append(el("div", parts.join(" · "), "conv-summary"));
+    hdr.append(el("div", "Message pairing is temporal, not proof of causality. Calls ordered by tool-call time.", "caveat"));
+    byId("trace").append(hdr);
+    const tz = byId("tz").value;
+    calls.forEach((row, i) => byId("trace").append(renderCall(row, i, tz)));
+  }
+
+  byId("file").addEventListener("change", async event => {
+    const file = event.target.files[0], version = ++loadVersion;
+    rows = []; selected = null;
+    byId("search").value = ""; byId("failed").checked = false;
+    byId("search").disabled = true; byId("failed").disabled = true;
+    refresh();
+    if (!file) { message("No CSV loaded."); return; }
+    message("Reading CSV locally...");
+    try {
+      const text = await file.text();
+      if (version !== loadVersion) return;
+      rows = parseCsv(text);
+      byId("search").disabled = false; byId("failed").disabled = false;
+      message(file.name + ": " + rows.length + " tool-call rows loaded locally. Nothing was uploaded.");
+      refresh();
+    } catch (error) {
+      if (version !== loadVersion) return;
+      rows = []; refresh(); message("Unable to load CSV: " + error.message, true);
+    }
+  });
+  byId("search").addEventListener("input", refresh);
+  byId("failed").addEventListener("change", refresh);
+  byId("tz").addEventListener("change", () => {
+    try { localStorage.setItem("mcp-trace-tz", byId("tz").value); } catch {}
+    refresh();
+  });
+  try {
+    const saved = localStorage.getItem("mcp-trace-tz");
+    if (saved && byId("tz").querySelector(`option[value="${CSS.escape(saved)}"]`)) byId("tz").value = saved;
+  } catch {}
+  byId("clear").addEventListener("click", () => {
+    ++loadVersion; rows = []; selected = null;
+    byId("file").value = ""; byId("search").value = ""; byId("failed").checked = false;
+    byId("search").disabled = true; byId("failed").disabled = true;
+    refresh(); message("Data cleared from this page.");
+  });
+  if (embeddedCsvBase64) {
+    try {
+      const bytes = Uint8Array.from(atob(embeddedCsvBase64), char => char.charCodeAt(0));
+      rows = parseCsv(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      byId("search").disabled = false; byId("failed").disabled = false;
+      message("Export snapshot: " + rows.length + " tool-call rows loaded from this HTML file. Nothing was uploaded.");
+      refresh();
+    } catch (error) {
+      rows = []; refresh(); message("Unable to load embedded export: " + error.message, true);
+    }
+  }
+}
+if (typeof module !== "undefined") module.exports = { parseCsv, groupRows, resultEvidence };
+</script>
+</body>
+</html>
