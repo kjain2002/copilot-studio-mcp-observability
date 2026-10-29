@@ -9,9 +9,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Synthetic script tests
         shell: pwsh
-        run: .\tests\Test-Script.ps1
+        run: .\dataverse\tests\Test-Script.ps1
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - name: Local HTML viewer tests
-        run: node --test tests\Test-Viewer.cjs
+        run: node --test dataverse\tests\Test-Viewer.cjs
+      - name: Agent debugger parser tests
+        shell: pwsh
+        run: .\agent-debugger\tests\Test-DebugParser.ps1
