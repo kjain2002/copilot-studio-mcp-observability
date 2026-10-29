@@ -11,20 +11,23 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -r requirements-dev.txt
-      - run: python -m unittest discover -s tests -p 'test_*.py' -v
-      - run: python -m ruff check .
-      - run: python -m pyright
-      - run: az bicep build --file infra/main.bicep --stdout > /dev/null
+      - run: python -m pip install -r dataverse/requirements-dev.txt
+      - run: python -m unittest discover -s dataverse/tests -p 'test_*.py' -v
+      - run: python -m ruff check dataverse/
+      - run: python -m pyright --pythonpath python dataverse/
+      - run: az bicep build --file dataverse/infra/main.bicep --stdout > /dev/null
   script:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Synthetic script tests
+      - name: Dataverse script tests
         shell: pwsh
-        run: .\tests\Test-Script.ps1
+        run: .\dataverse\tests\Test-Script.ps1
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Local HTML viewer tests
-        run: node --test tests\Test-Viewer.cjs
+      - name: HTML viewer tests
+        run: node --test dataverse\tests\Test-Viewer.cjs
+      - name: Agent debugger parser tests
+        shell: pwsh
+        run: .\agent-debugger\tests\Test-DebugParser.ps1
