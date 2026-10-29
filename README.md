@@ -42,7 +42,7 @@ copilot-studio-mcp-observability/
 │   ├── CLIENT-OVERVIEW.md              — Client outcomes, architecture, limits
 │   ├── DEPLOYMENT.md                   — Permissions, rollout and recovery
 │   └── environment-telemetry.kql       — Optional native telemetry investigation
-├── View-OneAgent.html                  — Local HTML trace viewer template
+├── View-OneAgent.html                  — Load calls.csv from Blob Storage to browse traces locally
 ├── tests/                              — Check collection without client data
 │   ├── test_observability.py           — Test correlation, scope and recovery
 │   ├── Test-Script.ps1                 — Test the optional one-agent helper
@@ -96,8 +96,8 @@ copilot-studio-mcp-observability/
 | [docs/CLIENT-OVERVIEW.md](docs/CLIENT-OVERVIEW.md) | Explains what monitoring delivers, its architecture and evidence limits to a client. |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Details Dataverse authorization, report consumption, replay/recovery and production acceptance. |
 | [docs/environment-telemetry.kql](docs/environment-telemetry.kql) | Optional investigation of native environment telemetry; separate from the transcript collector and not a guarantee of query visibility. |
-| [Export-OneAgent.ps1](Export-OneAgent.ps1), [Get-CopilotMcpToolLogs.ps1](Get-CopilotMcpToolLogs.ps1), [.env.example](.env.example) | Optional local helpers for discovering agent IDs or testing one agent. The exporter also generates a private HTML trace alongside the CSV. Their local `.env` does **not** configure scheduled collection. |
-| [View-OneAgent.html](View-OneAgent.html) | Local HTML trace viewer template. The exporter embeds CSV data into a copy of this file for offline conversation-level inspection with search, filtering and result tables. |
+| [View-OneAgent.html](View-OneAgent.html) | Open locally, then load `calls.csv` downloaded from Blob Storage to browse conversation-level traces with search, failed-call filtering and result tables. Nothing is uploaded; data stays in your browser. |
+| [Export-OneAgent.ps1](Export-OneAgent.ps1), [Get-CopilotMcpToolLogs.ps1](Get-CopilotMcpToolLogs.ps1), [.env.example](.env.example) | Optional local helpers for discovering agent IDs or testing one agent. Their local `.env` does **not** configure scheduled collection. |
 | [requirements.txt](requirements.txt) | Installs the Azure/HTTP libraries the hosted collector needs to authenticate, read transcripts and write reports. |
 | [requirements-dev.txt](requirements-dev.txt), [pyproject.toml](pyproject.toml), [.github/workflows/validate.yml](.github/workflows/validate.yml) | Configure repeatable code checks in development and GitHub; CI does not collect tenant data or deploy Azure resources. |
 | [.gitignore](.gitignore), [.funcignore](.funcignore) | Exclude local configuration/outputs from Git or Function publishing. They are safeguards, not a substitute for checking what you share. |
@@ -266,9 +266,27 @@ Use Azure Storage Explorer with Entra sign-in to inspect:
 - `manifest.json`: committed slice, scope, counts and checksums.
 - `run.json`: completed-run summary; `checkpoint.json`: last committed watermark and scope.
 
-For one/selected agents, verify **every exported BotId is in your configured list**.
+For one/selected agents, verify **every exported AgentId is in your configured list**.
 Prove at least one known conversation/tool/query and a failure case in the actual published channel.
 No rows is not sufficient verification. Alert delivery and external freshness checks must also be tested.
+
+### Browse traces in the HTML viewer
+
+Download `calls.csv` from the reports container using Azure Storage Explorer or the CLI,
+then open `View-OneAgent.html` from this repository in your browser. Click **Load CSV** and
+select the downloaded file. The viewer shows each conversation's tool-call flow:
+**user question -> tool -> query -> returned evidence -> agent response**, with search,
+failed-call filtering and timezone selection. Nothing is uploaded; all data stays in your browser.
+
+```powershell
+# Download the latest calls.csv from Blob Storage
+az storage blob download --account-name YOUR_REPORTS_ACCOUNT --container-name reports --auth-mode login --name environments/YOUR_ENVIRONMENT_GUID/calls.csv --file .\exports\calls.csv
+# Open the viewer
+Invoke-Item .\View-OneAgent.html
+```
+
+Keep downloaded reports private. The viewer reads CSV columns produced by the collector;
+the same viewer works with one-agent or multi-agent reports.
 
 ## 9. Operate safely
 

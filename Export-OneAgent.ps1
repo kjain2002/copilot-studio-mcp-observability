@@ -64,17 +64,9 @@ if ([IO.Path]::GetExtension($output) -ne '.csv') { throw 'OUTPUT_PATH must end i
 $arguments = @{ BotId = $bot.ToString(); DaysBack = $days; Format = 'Csv'; OutputPath = $output }
 if ($TranscriptsPath) { $arguments.TranscriptsPath = $TranscriptsPath } else { $arguments.DataverseUrl = $dataverse }
 $rows = @(& (Join-Path $PSScriptRoot 'Get-CopilotMcpToolLogs.ps1') @arguments)
-$htmlPath = [IO.Path]::ChangeExtension($output, '.html')
-$template = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'View-OneAgent.html') -Raw
-$marker = 'const embeddedCsvBase64 = "";'
-if (-not $template.Contains($marker)) { throw 'HTML viewer template is missing its embedded-data marker.' }
-$csvBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($output))
-$template.Replace($marker, "const embeddedCsvBase64 = `"$csvBase64`";") |
-    Set-Content -LiteralPath $htmlPath -Encoding utf8
 if ($rows.Count) {
     $rows | Select-Object ToolCallTime, BotName, ConversationId, ToolName, SqlQuery, Status | Format-Table -Wrap
 } else {
     Write-Warning 'No completed tool calls found for this BOT_ID. A header-only CSV is not evidence that collection is complete. Check transcript delay, recording, permissions, time range and tool event shape.'
 }
 Write-Host "Private one-agent table: $output"
-Write-Host "Private HTML trace (data already loaded): $htmlPath"

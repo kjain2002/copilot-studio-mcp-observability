@@ -24,11 +24,6 @@ try {
     $csvRows = @(Import-Csv (Join-Path $temp 'one-agent.csv'))
     if ($csvRows.Count -ne 1 -or $csvRows[0].AgentId -ne '11111111-1111-1111-1111-111111111111') { throw 'One-agent .env lookup filter failed.' }
     if ($csvRows[0].BotId -ne 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa') { throw 'Source metadata BotId was not preserved separately.' }
-    $html = Get-Content -LiteralPath (Join-Path $temp 'one-agent.html') -Raw
-    if ($html -notmatch 'const embeddedCsvBase64 = "([A-Za-z0-9+/=]+)";') { throw 'HTML report did not embed CSV data.' }
-    $embedded = [Convert]::FromBase64String($Matches[1])
-    $original = [IO.File]::ReadAllBytes((Join-Path $temp 'one-agent.csv'))
-    if ([Convert]::ToBase64String($embedded) -ne [Convert]::ToBase64String($original)) { throw 'HTML snapshot differs from exported CSV.' }
     $fixture = Join-Path $temp 'identity-cases.json'
     $sample = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'synthetic-transcripts.json') -Raw | ConvertFrom-Json -AsHashtable)
     $other = ($sample[0] | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable)
@@ -62,6 +57,6 @@ try {
     if ((Get-Content $output -Raw).Trim() -ne '[]') { throw 'Empty JSON must be an array.' }
     Write-Host 'Script tests passed.'
 } finally {
-    Remove-Item -LiteralPath (Join-Path $temp 'result.json'), (Join-Path $temp 'empty.json'), (Join-Path $temp '.env'), (Join-Path $temp 'one-agent.csv'), (Join-Path $temp 'one-agent.html'), (Join-Path $temp 'identity-cases.json') -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $temp 'result.json'), (Join-Path $temp 'empty.json'), (Join-Path $temp '.env'), (Join-Path $temp 'one-agent.csv'), (Join-Path $temp 'identity-cases.json') -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $temp
 }

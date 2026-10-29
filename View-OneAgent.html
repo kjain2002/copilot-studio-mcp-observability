@@ -283,7 +283,7 @@ details summary:hover { color: var(--text-2); }
 <body>
 <div class="header">
   <h1>MCP Tool Call Traces</h1>
-  <div class="header-sub">View each tool call: what the user asked, what query was passed, what came back, and how the agent responded.</div>
+  <div class="header-sub">Load <code>calls.csv</code> from Blob Storage to inspect each tool call: what the user asked, what query was passed, what came back, and how the agent responded.</div>
   <div class="toolbar">
     <label class="upload-label">Load CSV<input id="file" type="file" accept=".csv,text/csv"></label>
     <button id="clear" class="btn-clear" type="button">Clear</button>
@@ -690,8 +690,8 @@ if (typeof document !== "undefined") {
         byId("trace").firstChild.append(el("h2", "No calls match your filters."), el("p", "Try a different search term or uncheck the failed-only filter."));
       } else {
         const landing = el("div", undefined, "landing");
-        landing.append(el("h2", "Load a CSV to explore traces"));
-        landing.append(el("p", "Select your exported CSV above. Each conversation shows the full flow of every MCP tool call."));
+        landing.append(el("h2", "Load calls.csv from Blob Storage"));
+        landing.append(el("p", "Download calls.csv from your private reports container in Azure Storage Explorer, then load it here. Each conversation shows the full flow of every MCP tool call. Nothing is uploaded."));
         const hint = el("div", undefined, "flow-hint");
         hint.innerHTML = "<span>User Query</span> &rarr; <span>Tool Input</span> &rarr; <span>Results</span> &rarr; <span>Agent Response</span>";
         landing.append(hint);
